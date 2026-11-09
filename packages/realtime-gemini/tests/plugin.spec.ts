@@ -77,7 +77,7 @@ describe('realtime-gemini plugin', () => {
       establishTimeoutMs: number
     }
     expect(resolved.provider).toBe('gemini-live')
-    expect(resolved.model).toBe('models/gemini-2.0-flash-exp')
+    expect(resolved.model).toBe('models/gemini-3.8-live')
     expect(resolved.voice).toBe('Puck')
     expect(resolved.instructions).toBe(DEFAULT_GEMINI_INSTRUCTIONS)
     expect(resolved.establishTimeoutMs).toBe(20_000)

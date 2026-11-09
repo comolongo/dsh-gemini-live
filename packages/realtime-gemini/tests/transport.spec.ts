@@ -134,7 +134,7 @@ describe('openGeminiTransport', () => {
     expect(socket.sent.length).toBe(1)
     expect(JSON.parse(socket.sent[0] as string)).toEqual({
       realtimeInput: {
-        mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: Buffer.from([0x01, 0x02]).toString('base64') }],
+        audio: { mimeType: 'audio/pcm;rate=16000', data: Buffer.from([0x01, 0x02]).toString('base64') },
       },
     })
 
@@ -181,6 +181,34 @@ describe('openGeminiTransport', () => {
     )
 
     expect(messages).toHaveLength(1)
+  })
+
+  it('skips a part with no audio and one with empty audio, even with a handler attached', () => {
+    const socket = new FakeSocket()
+    const audio: Uint8Array[] = []
+    openGeminiTransport(socket, {
+      onMessage: () => {},
+      onAudio: (pcm) => audio.push(pcm),
+      onClose: () => {},
+      onError: () => {},
+    })
+    socket.emit('open')
+
+    socket.emit(
+      'message',
+      JSON.stringify({
+        serverContent: {
+          modelTurn: {
+            parts: [
+              { text: 'a text part carries no audio' },
+              { inlineData: { mimeType: 'audio/pcm;rate=24000', data: '' } },
+            ],
+          },
+        },
+      }),
+    )
+
+    expect(audio).toEqual([])
   })
 
   it('wraps a non-Error socket failure as an Error', () => {

@@ -21,7 +21,10 @@ import { buildSetupMessage } from './wire.ts'
 export const GEMINI_LIVE_ENDPOINT =
   'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'
 
-export const DEFAULT_GEMINI_MODEL = 'models/gemini-2.0-flash-exp'
+/** The default route model. Read from the published model list on 2026-11-09; the 2.0-live experiments this
+ * adapter was first written against are gone, and a retired model fails on the first session with a provider
+ * error that names a model id nobody recognises. */
+export const DEFAULT_GEMINI_MODEL = 'models/gemini-3.8-live'
 export const DEFAULT_GEMINI_VOICE = 'Puck'
 
 export type SocketFactory = (url: string) => SocketLike
@@ -35,16 +38,23 @@ export interface GeminiAdapterConfig {
   readonly establishTimeoutMs?: number
 }
 
+/**
+ * The Live models this adapter can drive.
+ *
+ * `gemini-3.8-live-extended-thinking` is deliberately absent: it requires asynchronous function calling
+ * (`behavior: NON_BLOCKING` plus `scheduling` on each response), and this adapter answers with a blocking
+ * `toolResponse`. Advertising it would promise a mode the delegation path does not implement.
+ */
 const ADVERTISED_MODELS: readonly RealtimeModelInfo[] = [
   {
-    id: 'gemini-2.0-flash-exp',
-    name: 'Gemini 2.0 Flash (Experimental Live)',
+    id: 'gemini-3.8-live',
+    name: 'Gemini 3.8 Live',
     inputModalities: ['audio', 'text'],
     outputModalities: ['audio', 'text'],
   },
   {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash (Live)',
+    id: 'gemini-3.1-flash-live-preview',
+    name: 'Gemini 3.1 Flash Live (Legacy Preview)',
     inputModalities: ['audio', 'text'],
     outputModalities: ['audio', 'text'],
   },

@@ -48,7 +48,7 @@ describe('GeminiLiveAdapter', () => {
     const adapter = new GeminiLiveAdapter({}, () => new FakeSocket())
     const models = await adapter.listModels()
     expect(models.length).toBeGreaterThan(0)
-    expect(models.some((m) => m.id === 'gemini-2.0-flash-exp')).toBe(true)
+    expect(models.some((m) => m.id === 'gemini-3.8-live')).toBe(true)
   })
 
   it('throws MISSING_CREDENTIAL when session() is called with no apiKey', async () => {
@@ -56,7 +56,7 @@ describe('GeminiLiveAdapter', () => {
     await expect(
       adapter.session({
         provider: 'gemini-live',
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-3.8-live',
       }),
     ).rejects.toThrow(
       expect.objectContaining({
@@ -71,7 +71,7 @@ describe('GeminiLiveAdapter', () => {
     const adapter = new GeminiLiveAdapter(
       {
         apiKey: 'secret-gemini-key',
-        model: 'models/gemini-2.0-flash-exp',
+        model: 'models/gemini-3.8-live',
         voice: 'Aoede',
       },
       (url) => {
@@ -82,7 +82,7 @@ describe('GeminiLiveAdapter', () => {
 
     const sessionPromise = adapter.session({
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
     })
 
     expect(openedUrl).toContain(GEMINI_LIVE_ENDPOINT)
@@ -93,7 +93,7 @@ describe('GeminiLiveAdapter', () => {
     // Adapter should have sent setup message
     expect(socket.sent.length).toBe(1)
     const setupJson = JSON.parse(socket.sent[0] as string)
-    expect(setupJson.setup.model).toBe('models/gemini-2.0-flash-exp')
+    expect(setupJson.setup.model).toBe('models/gemini-3.8-live')
     expect(setupJson.setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Aoede')
 
     // Gemini replies with setupComplete
@@ -116,7 +116,7 @@ describe('GeminiLiveAdapter', () => {
 
     const sessionPromise = adapter.session({
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
     })
 
     socket.emit('open')
@@ -140,7 +140,7 @@ describe('GeminiLiveAdapter', () => {
   it('names a generic setup failure when the provider error frame carries no message', async () => {
     const socket = new FakeSocket()
     const adapter = new GeminiLiveAdapter({ apiKey: 'key' }, () => socket)
-    const pending = adapter.session({ provider: 'gemini-live', model: 'models/gemini-2.0-flash-exp' })
+    const pending = adapter.session({ provider: 'gemini-live', model: 'models/gemini-3.8-live' })
     socket.emit('open')
     socket.emit('message', JSON.stringify({ error: { code: 400 } }))
 
@@ -164,7 +164,7 @@ describe('GeminiLiveAdapter', () => {
 
     const sessionPromise = adapter.session({
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
     })
 
     socket.emit('open')
@@ -184,7 +184,7 @@ describe('GeminiLiveAdapter', () => {
     await expect(
       adapter.session({
         provider: 'gemini-live',
-        model: 'models/gemini-2.0-flash-exp',
+        model: 'models/gemini-3.8-live',
         signal: controller.signal,
       }),
     ).rejects.toThrow(expect.objectContaining({ code: REALTIME_ERROR_CODES.NETWORK }))
@@ -198,7 +198,7 @@ describe('GeminiLiveAdapter', () => {
       return socket
     })
 
-    const opened = adapter.session({ provider: 'gemini-live', model: 'models/gemini-2.0-flash-exp' })
+    const opened = adapter.session({ provider: 'gemini-live', model: 'models/gemini-3.8-live' })
     socket.emit('open')
     socket.emit('message', JSON.stringify({ setupComplete: {} }))
     await opened
@@ -219,7 +219,7 @@ describe('GeminiLiveAdapter', () => {
       return socket
     })
 
-    const opened = adapter.session({ provider: 'gemini-live', model: 'models/gemini-2.0-flash-exp' })
+    const opened = adapter.session({ provider: 'gemini-live', model: 'models/gemini-3.8-live' })
     socket.emit('open')
     socket.emit('message', JSON.stringify({ setupComplete: {} }))
     await opened
@@ -246,7 +246,7 @@ describe('GeminiLiveAdapter', () => {
     expect(fromConfig.started.voice).toBe('Kore')
 
     const fromDefaults = await openWith({}, { model: '', voice: '' })
-    expect(fromDefaults.started.model).toBe('models/gemini-2.0-flash-exp')
+    expect(fromDefaults.started.model).toBe('models/gemini-3.8-live')
     expect(fromDefaults.started.voice).toBe('Puck')
   })
 
@@ -255,7 +255,7 @@ describe('GeminiLiveAdapter', () => {
     const adapter = new GeminiLiveAdapter({ apiKey: 'key' }, () => socket)
     const opened = adapter.session({
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       instructions: '   ',
     })
     socket.emit('open')
@@ -273,7 +273,7 @@ describe('GeminiLiveAdapter', () => {
 
     const opened = adapter.session({
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       handlers: { onAudio: (pcm) => audio.push(pcm) },
     })
     socket.emit('open')
@@ -299,7 +299,7 @@ describe('GeminiLiveAdapter', () => {
   it('reports a close before establishment, with the provider reason only when it gave one', async () => {
     const socket = new FakeSocket()
     const adapter = new GeminiLiveAdapter({ apiKey: 'key' }, () => socket)
-    const pending = adapter.session({ provider: 'gemini-live', model: 'models/gemini-2.0-flash-exp' })
+    const pending = adapter.session({ provider: 'gemini-live', model: 'models/gemini-3.8-live' })
     socket.emit('open')
     socket.emit('close', 'boom')
     await expect(pending).rejects.toThrow(
@@ -311,7 +311,7 @@ describe('GeminiLiveAdapter', () => {
 
     const silentSocket = new FakeSocket()
     const silentAdapter = new GeminiLiveAdapter({ apiKey: 'key' }, () => silentSocket)
-    const silent = silentAdapter.session({ provider: 'gemini-live', model: 'models/gemini-2.0-flash-exp' })
+    const silent = silentAdapter.session({ provider: 'gemini-live', model: 'models/gemini-3.8-live' })
     silentSocket.emit('open')
     silentSocket.emit('close')
     await expect(silent).rejects.toThrow(
@@ -322,7 +322,7 @@ describe('GeminiLiveAdapter', () => {
   it('wraps a non-Error socket failure, and passes a coded one through unchanged', async () => {
     const socket = new FakeSocket()
     const adapter = new GeminiLiveAdapter({ apiKey: 'key' }, () => socket)
-    const pending = adapter.session({ provider: 'gemini-live', model: 'models/gemini-2.0-flash-exp' })
+    const pending = adapter.session({ provider: 'gemini-live', model: 'models/gemini-3.8-live' })
     socket.emit('open')
     socket.emit('error', 'socket exploded')
 
@@ -339,7 +339,7 @@ describe('GeminiLiveAdapter', () => {
 
     const opened = adapter.session({
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       handlers: {
         onError: (error) => errors.push(error),
         onClosed: (reason) => {

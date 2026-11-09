@@ -40,7 +40,7 @@ RULES:
 export const Config = Schema.object({
   apiKey: Schema.string().description(`Gemini API key; supply from ${API_KEY_SETTING} or GOOGLE_API_KEY`),
   provider: Schema.string().default('gemini-live').description('Provider route to register on the seam'),
-  model: Schema.string().default('models/gemini-2.0-flash-exp').description('Gemini Live model'),
+  model: Schema.string().default('models/gemini-3.8-live').description('Gemini Live model'),
   voice: Schema.string().default('Puck').description('Prebuilt voice: Puck, Charon, Kore, Fenrir, Aoede'),
   instructions: Schema.string().default(DEFAULT_GEMINI_INSTRUCTIONS).description('System instructions'),
   establishTimeoutMs: Schema.number().default(20_000).description('Bound on waiting for setupComplete'),
@@ -65,7 +65,7 @@ export function apply(ctx: Context, config: GeminiPluginConfig = {}): void {
     new GeminiLiveAdapter(
       {
         ...(config.apiKey !== undefined ? { apiKey: config.apiKey } : {}),
-        model: config.model ?? 'models/gemini-2.0-flash-exp',
+        model: config.model ?? 'models/gemini-3.8-live',
         voice: config.voice ?? 'Puck',
         instructions: config.instructions ?? DEFAULT_GEMINI_INSTRUCTIONS,
         establishTimeoutMs: config.establishTimeoutMs ?? 20_000,

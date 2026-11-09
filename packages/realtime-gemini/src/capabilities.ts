@@ -1,17 +1,26 @@
 /**
  * Gemini Live capabilities declaration.
  *
- * Grounded in the Gemini Multimodal Live API (BidiGenerateContent over WebSocket):
+ * Grounded in the Gemini Multimodal Live API (BidiGenerateContent over WebSocket), read against the published
+ * reference on 2026-11-09:
  *
  * - `appendThinking: false` — Gemini Live has no separate silent thinking channel mid-turn.
- * - `appAuthoredSpeech: true` — when Gemini calls `ask_coding_agent`, DSH runs the task and
- *   returns the result via `toolResponse`, which Gemini then speaks.
- * - `injectLine: true` — client can inject user/context turns via `clientContent`.
- * - `functionCalls: true` — native in-band function/tool calling (`toolCall` / `toolResponse`).
- * - `usageReporting: true` — reported in server `usageMetadata` frames.
- * - `transcriptDeltas: false` — whole utterance transcript chunks in `serverContent.modelTurn`.
- * - `inputMute: true` — adapter stops writing audio frames locally.
- * - `promptUpdate: 'append'` — mid-session instructions or context appended via `clientContent`.
+ * - `appAuthoredSpeech: true` — when Gemini calls `ask_coding_agent`, DSH runs the task and returns the
+ *   result as a `FunctionResponse`; the model then speaks it. The application authored the result — the same
+ *   reading ADR-011 gives the delegation answer for a tool-calling provider.
+ * - `injectLine: true` — a line can be injected as a `clientContent` turn, which the model says in its own
+ *   words. It is what narration uses, and it is the weaker promise.
+ * - `functionCalls: true` — native in-band function calling (`toolCall` / `toolResponse`), synchronous unless
+ *   the declaration opts into `behavior: NON_BLOCKING`.
+ * - `usageReporting: true` — reported in `usageMetadata` frames. The seam's unit is audio seconds; this
+ *   adapter derives them from the reported token count, which is a proxy the docs do not define as seconds.
+ * - `transcriptDeltas: true` — text arrives as transcription (`serverContent.outputTranscription` /
+ *   `inputTranscription`), and the model's side is **chunked**: the newest chunk is held until the next one
+ *   arrives or the turn completes, so the final fragment of a turn is the one marked `final`. The user's side
+ *   is delivered as the provider sends it (its frequent-update stream is a separate field this adapter ignores).
+ * - `inputMute: true` — the adapter stops writing audio frames locally.
+ * - `promptUpdate: 'append'` — a mid-session instruction update is written as a `clientContent` turn, which the
+ *   reference says is appended to the conversation history; it does not replace the opening instruction.
  *
  * @module dsh-realtime-gemini/capabilities
  */
@@ -23,7 +32,7 @@ export const GEMINI_CAPABILITIES: RealtimeCapabilities = Object.freeze({
   injectLine: true,
   functionCalls: true,
   usageReporting: true,
-  transcriptDeltas: false,
+  transcriptDeltas: true,
   inputMute: true,
   promptUpdate: 'append',
 })

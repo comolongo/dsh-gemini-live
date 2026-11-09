@@ -44,9 +44,16 @@ describe('Gemini Live keyless replay', () => {
     // Wait for the replayed events to stream across ticks
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    // 1. Transcript arrived
-    expect(transcripts.length).toBeGreaterThanOrEqual(1)
-    expect(transcripts[0]!.text).toBe('Checking the repository status for you.')
+    // 1. Transcript arrived. The model's side is chunked, so the first chunk is released when the second
+    //    lands, and the last chunk is the one the turn's end marks final.
+    const spoken = transcripts.filter(t => t.kind === 'output')
+    expect(spoken.map(t => t.text)).toEqual([
+      'Checking the repository status for you.',
+      'Git status is clean and all 60 test suites are passing.',
+    ])
+    expect(spoken.map(t => t.final)).toEqual([false, true])
+    // The user's side is reported as the provider sends it, and is closed by its own turn.
+    expect(transcripts.some(t => t.kind === 'input' && t.text === 'check the repo status')).toBe(true)
 
     // 2. Tool call delegation arrived with task payload
     expect(delegations.length).toBe(1)
@@ -69,10 +76,14 @@ describe('Gemini Live keyless replay', () => {
 
     expect(toolResp).toBeDefined()
     const functionResponses = (
-      toolResp!['toolResponse'] as { functionResponses: { id: string; response: { output: { result: string } } }[] }
+      toolResp!['toolResponse'] as { functionResponses: { id: string; name: string; response: { result: string } }[] }
     ).functionResponses
-    expect(functionResponses[0]!.id).toBe('call_fixture_1')
-    expect(functionResponses[0]!.response.output.result).toBe('Git clean, 60 suites passing')
+    // The response carries the call's own name: the server matches on id *and* name.
+    expect(functionResponses[0]).toEqual({
+      id: 'call_fixture_1',
+      name: 'ask_coding_agent',
+      response: { result: 'Git clean, 60 suites passing' },
+    })
 
     // 4. Usage metadata arrived
     expect(usages.length).toBeGreaterThanOrEqual(1)

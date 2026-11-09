@@ -46,7 +46,7 @@
       name: 'dsh-realtime-gemini'
       config:
         provider: gemini-live
-        model: models/gemini-2.0-flash-exp
+        model: models/gemini-3.8-live
         voice: Puck
         apiKey: !!js process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
 
@@ -54,7 +54,7 @@
       name: 'dsh-realtime-agent'
       config:
         provider: gemini-live
-        model: models/gemini-2.0-flash-exp
+        model: models/gemini-3.8-live
         # Mounting the bundle must not, by itself, open a socket or spend credit.
         autoStart: false
         # The voice model waits this long for an answer; the responder's `answerTimeoutMs` is the other

@@ -29,7 +29,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       voice: 'Puck',
       transport,
       handlers: {},
@@ -37,7 +37,7 @@ describe('GeminiLiveSession', () => {
 
     expect(session.id).toBe('test-session')
     expect(session.started.provider).toBe('gemini-live')
-    expect(session.started.model).toBe('models/gemini-2.0-flash-exp')
+    expect(session.started.model).toBe('models/gemini-3.8-live')
     expect(session.started.voice).toBe('Puck')
     expect(session.started.inputAudio.sampleRate).toBe(16_000)
     expect(session.started.outputAudio.sampleRate).toBe(24_000)
@@ -48,7 +48,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: {},
     })
@@ -68,7 +68,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: {},
     })
@@ -82,23 +82,53 @@ describe('GeminiLiveSession', () => {
     expect(transport.sentAudio.length).toBe(1)
   })
 
-  it('delivers toolResponse when appendCommentary answers a delegationId', async () => {
+  it('answers a delegation as a toolResponse named after the call that asked', async () => {
     const transport = new MockTransport()
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: {},
     })
 
+    session.receive({
+      toolCall: { functionCalls: [{ id: 'call_abc123', name: 'ask_coding_agent', args: { task: 'edit a file' } }] },
+    })
     await session.appendCommentary('Files edited successfully.', 'call_abc123')
+
     expect(transport.sent.length).toBe(1)
     const msg = transport.sent[0] as {
-      toolResponse: { functionResponses: { id: string; response: { output: { result: string } } }[] }
+      toolResponse: { functionResponses: { id: string; name: string; response: { result: string } }[] }
     }
-    expect(msg.toolResponse.functionResponses[0]!.id).toBe('call_abc123')
-    expect(msg.toolResponse.functionResponses[0]!.response.output.result).toBe('Files edited successfully.')
+    // The response carries the call's own name: the server matches on id *and* name, and a response without
+    // one cannot be delivered to the call that is waiting for it.
+    expect(msg.toolResponse.functionResponses[0]).toEqual({
+      id: 'call_abc123',
+      name: 'ask_coding_agent',
+      response: { result: 'Files edited successfully.' },
+    })
+  })
+
+  it('answers an id it never saw called by naming the one function this adapter declares', async () => {
+    const transport = new MockTransport()
+    const session = new GeminiLiveSession({
+      id: 'test-session',
+      provider: 'gemini-live',
+      model: 'models/gemini-3.8-live',
+      transport,
+      handlers: {},
+    })
+
+    await session.appendCommentary('answered anyway', 'call_unknown')
+
+    const msg = transport.sent[0] as {
+      toolResponse: { functionResponses: readonly { id: string; name: string }[] }
+    }
+    expect(msg.toolResponse.functionResponses[0]).toMatchObject({
+      id: 'call_unknown',
+      name: 'ask_coding_agent',
+    })
   })
 
   it('drops an audio frame too short to resample rather than sending an empty one', () => {
@@ -106,7 +136,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: {},
     })
@@ -121,7 +151,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: {},
     })
@@ -137,7 +167,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: {},
     })
@@ -158,7 +188,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport: new MockTransport(),
       handlers,
     })
@@ -186,7 +216,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport: new MockTransport(),
       handlers: {
         onTranscript: (t) => transcripts.push(t),
@@ -213,7 +243,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport: new MockTransport(),
       handlers: {
         onError: (err) => errors.push(err),
@@ -236,7 +266,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport: new MockTransport(),
       handlers: { onError: (err) => errors.push(err) },
     })
@@ -251,7 +281,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: {},
     })
@@ -272,7 +302,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: {},
     })
@@ -292,7 +322,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: {},
     })
@@ -309,7 +339,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: {},
     })
@@ -325,7 +355,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport: new MockTransport(),
       handlers: { onDelegation: (d) => delegations.push(d) },
     })
@@ -340,7 +370,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport: new MockTransport(),
       handlers: { onUsage: (u) => usages.push(u) },
     })
@@ -357,7 +387,7 @@ describe('GeminiLiveSession', () => {
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport: new MockTransport(),
       handlers: { onTranscript: (t) => transcripts.push(t) },
     })
@@ -367,13 +397,81 @@ describe('GeminiLiveSession', () => {
     expect(transcripts[0]!.final).toBe(false)
   })
 
+  it('holds the model’s newest transcription chunk until the next one, and closes it at the turn’s end', () => {
+    const transcripts: RealtimeTranscript[] = []
+    const session = new GeminiLiveSession({
+      id: 'test-session',
+      provider: 'gemini-live',
+      model: 'models/gemini-3.8-live',
+      transport: new MockTransport(),
+      handlers: { onTranscript: (t) => transcripts.push(t) },
+    })
+
+    session.receive({ serverContent: { outputTranscription: { text: 'one ' } } })
+    // Held, not emitted: releasing it now would mark the first chunk of a turn as a whole utterance.
+    expect(transcripts).toEqual([])
+
+    session.receive({ serverContent: { outputTranscription: { text: 'two' } } })
+    expect(transcripts).toEqual([{ kind: 'output', text: 'one ', final: false }])
+
+    session.receive({ serverContent: { turnComplete: true } })
+    expect(transcripts[1]).toEqual({ kind: 'output', text: 'two', final: true })
+  })
+
+  it('emits nothing for an empty turn, an empty chunk, or an empty input transcription', () => {
+    const transcripts: RealtimeTranscript[] = []
+    const session = new GeminiLiveSession({
+      id: 'test-session',
+      provider: 'gemini-live',
+      model: 'models/gemini-3.8-live',
+      transport: new MockTransport(),
+      handlers: { onTranscript: (t) => transcripts.push(t) },
+    })
+
+    session.receive({ serverContent: { turnComplete: true } })
+    session.receive({ serverContent: { outputTranscription: { text: '' }, inputTranscription: { text: '' } } })
+
+    expect(transcripts).toEqual([])
+  })
+
+  it('reports the user’s words as they arrive, already final', () => {
+    const transcripts: RealtimeTranscript[] = []
+    const session = new GeminiLiveSession({
+      id: 'test-session',
+      provider: 'gemini-live',
+      model: 'models/gemini-3.8-live',
+      transport: new MockTransport(),
+      handlers: { onTranscript: (t) => transcripts.push(t) },
+    })
+
+    session.receive({ serverContent: { inputTranscription: { text: 'what changed?' }, turnComplete: true } })
+
+    expect(transcripts).toEqual([{ kind: 'input', text: 'what changed?', final: true }])
+  })
+
+  it('reports a held transcription when the session closes, rather than dropping it', async () => {
+    const transcripts: RealtimeTranscript[] = []
+    const session = new GeminiLiveSession({
+      id: 'test-session',
+      provider: 'gemini-live',
+      model: 'models/gemini-3.8-live',
+      transport: new MockTransport(),
+      handlers: { onTranscript: (t) => transcripts.push(t) },
+    })
+
+    session.receive({ serverContent: { outputTranscription: { text: 'last thing said' } } })
+    await session.close()
+
+    expect(transcripts).toEqual([{ kind: 'output', text: 'last thing said', final: true }])
+  })
+
   it('goes quiet once closed: audio, appends and inbound frames are all ignored', async () => {
     const transport = new MockTransport()
     const delegations: RealtimeDelegation[] = []
     const session = new GeminiLiveSession({
       id: 'test-session',
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       transport,
       handlers: { onDelegation: (d) => delegations.push(d) },
     })

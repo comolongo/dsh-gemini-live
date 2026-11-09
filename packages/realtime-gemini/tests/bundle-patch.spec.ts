@@ -212,12 +212,12 @@ describe('the shipped Gemini Live bundle patch', () => {
     // `models/gpt-live-1`.
     expect(row('dsh-realtime-agent').config).toMatchObject({
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
       autoStart: false,
     })
     expect(row('dsh-realtime-gemini').config).toMatchObject({
       provider: 'gemini-live',
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-3.8-live',
     })
   })
 
@@ -278,7 +278,7 @@ describe('the shipped Gemini Live bundle patch', () => {
     try {
       await loaded.realtime.session({
         provider: 'gemini-live',
-        model: 'models/gemini-2.0-flash-exp',
+        model: 'models/gemini-3.8-live',
         handlers: {},
       })
     } catch (error) {
