@@ -170,8 +170,14 @@ now keeps the whole declaration (`packages/realtime/src/index.ts`), and
 pnpm install
 pnpm gate                      # leakscan → build → declared-deps → typecheck → coverage → built-artifact smoke
 export GEMINI_API_KEY=…        # or GOOGLE_API_KEY; never a file this code reads
+node scripts/gemini-probe.mjs  # the first live run: setup → tool call → tool response → transcript
 dsh plugin --profile <name> add dsh-openai-live   # mounts cordis.gemini.patch.yml
 ```
+
+`scripts/gemini-probe.mjs` is the probe the offline suite cannot be: it opens one real session with a text
+turn, prints every frame the adapter depends on, and answers the chunked-vs-cumulative transcription
+question from §5 by printing the events. It executes nothing — the tool result is a canned string — so it
+proves the channel without touching the workspace.
 
 The adapter's schema leaves `apiKey` optional on purpose: a profile composes without a key, the
 `gemini-live` route registers, and opening a session fails with `MISSING_CREDENTIAL` — naming the
