@@ -251,7 +251,12 @@ describe('the journal the agent writes', () => {
     await tick()
 
     const settled = journal.snapshot().find(entry => entry.kind === 'transcript.settled')
-    expect(settled?.detail).toEqual({ waitedMs: '0', fragments: '0', capped: 'false' })
+    // The wait is compared as a small number rather than pinned to '0': the settle loop reads a clock, so on a
+    // loaded machine it can report 1 ms without anything having been waited *for*. A gate that reddens on that
+    // is indistinguishable from a regression, and the entry's meaning is "nothing to wait for", not zero.
+    const detail = settled?.detail as { waitedMs: string; fragments: string; capped: string }
+    expect(detail).toMatchObject({ fragments: '0', capped: 'false' })
+    expect(Number(detail.waitedMs)).toBeLessThan(50)
   })
 
   it('records that the model heard something, and never what it heard', async () => {
