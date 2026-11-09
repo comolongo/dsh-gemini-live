@@ -9,7 +9,7 @@ conversation to DeepSeek Harness (DSH) using Gemini Live instead of OpenAI.
 * **Last Updated**: 2026-11-09
 * **Base Commit**: `6f78ffc` (`feat(seam): split appAuthoredSpeech — refuse appendCommentary, add injectLine`)
 * **Test Baseline at the pin**: 60 test suites, 1,081 tests passing offline with zero credentials.
-* **Test Baseline now**: 69 test suites, 1,166 tests passing offline with zero credentials, **per-file
+* **Test Baseline now**: 69 test suites, 1,167 tests passing offline with zero credentials, **per-file
   100% on statements, branches, functions and lines** across `packages/*/src` — the repo's gate, not a
   target.
 
@@ -17,10 +17,10 @@ What is proven and what is not, stated first because the difference matters:
 
 | Claim | Evidence |
 |---|---|
-| The adapter drives a real session end to end | `GeminiLiveAdapter` + `GeminiLiveSession` run against a fake socket in 78 package tests; a recorded fixture drives the *real* adapter keylessly (`gemini-replay.spec.ts`) |
+| The adapter drives a real session end to end | `GeminiLiveAdapter` + `GeminiLiveSession` run against a fake socket in 79 package tests; a recorded fixture drives the *real* adapter keylessly (`gemini-replay.spec.ts`) |
 | The declaration is honoured | The shared conformance suite runs against Gemini as a third subject and reports no divergence |
 | The bundle composes without a credential | `cordis.gemini.patch.yml` boots through the real Cordis Loader with both credential variables absent |
-| **The wire is correct against Google's server** | **NOT YET PROVEN.** No run with a real `GEMINI_API_KEY` has happened. Every frame shape below is documented, not observed — the distinction this repo draws everywhere else (ADR-012) applies here with full force |
+| **The wire is correct against Google's server** | **PROVEN 2026-11-09.** One live session via `scripts/gemini-probe.mjs`: setup accepted, `toolCall` with id/name/args, `toolResponse` accepted, 14 audio frames and 4 output-transcription chunks, `usageMetadata` with per-modality details. See §5 for what it did *not* cover |
 
 ---
 
@@ -187,39 +187,54 @@ another conversation's reply.
 
 ---
 
-## 5. Known limits and what the first live run should check
+## 5. The live run, and what it could not cover
 
-1. **No live session has been opened.** The first thing to do with a key is a single `voice_start` and one
-   delegated turn. The assumptions worth watching, in the order they would hurt:
-   - `setupComplete` arrives on the same socket, and the setup frame's `tools`, `systemInstruction` and the
-     two transcription configs are accepted as spelled. A silent drop of `tools` would make the model chat
-     but never delegate; a silent drop of the transcription configs would make captions empty with no error.
-   - The output transcription is chunked the way the reference implies (each event a fragment, the last
-     before `turnComplete`). If it is instead cumulative, the hold-and-release path would emit duplicated
-     text — the one behaviour in this adapter that a live run should change, and the reason the seam's
-     `transcriptDeltas` is declared `true` rather than guessed at `false`.
-   - `usageMetadata.totalTokenCount` is present and the token→second proxy (`/50`) is the right order of
-     magnitude. It remains a proxy: the seam's `RealtimeUsage.seconds` is audio seconds, and this adapter
-     does not measure audio duration itself.
-2. **The 15-minute audio-only session cap is a product limit, not a bug.** When it is reached the server
-   sends `goAway` and then closes; the adapter surfaces the close as `onClosed`, so the session ends
-   mid-conversation. Session resumption (`sessionResumption` + `SessionResumptionUpdate`) is the documented
-   fix and is **not** implemented; a long coding turn can be cut off by it.
-3. **`toolCallCancellation` handling is defensive.** It prevents an answer being written for a withdrawn
-   call; whether Gemini sends it before or after `interrupted` is unobserved.
-4. **Free-tier limits and entitlement** were not probed (no key). The pricing page says `gemini-3.8-live` is
-   free of charge on the free tier, with content used to improve Google's products; rate limits are a
-   separate page and were not read. `NOT_ENTITLED` / `INSUFFICIENT_CREDIT` are the seam's codes, and which
-   one a free-tier refusal maps to is unknown until it happens.
-5. **The recording is authored, not captured.** `gemini-session.jsonl` mirrors the documented frame shapes
-   (including transcription chunks now) so the replay path can be tested; replacing it with a captured
-   session is the honest follow-up once a key exists.
+**First live session: 2026-11-09**, `scripts/gemini-probe.mjs`, `gemini-3.8-live`, one text turn, no audio
+sent. Observed, in order:
+
+- `setupComplete` arrived on the same socket: the `tools` array, `systemInstruction` and both transcription
+  configs were accepted as spelled.
+- The model called `ask_coding_agent` with `id=call_9677774247773478703`, `name=ask_coding_agent` and
+  `args={"task":"Run `git status --short` …"}`.
+- The `toolResponse` (id **and** name) was accepted, and the model then spoke: **14 audio frames** at
+  24 kHz (3.8–28.8 KB each).
+- **4 `outputTranscription` events**, whose text concatenated cleanly into
+  *"I have checked the status, and there are no modified or untracked files in the workspace."* — so output
+  transcription is **chunked (deltas), not cumulative**, which is what the hold-and-release path and
+  `transcriptDeltas: true` assume. This was the open question, and it is now answered by observation.
+- `usageMetadata`: `promptTokenCount 718`, `responseTokenCount 123`, `totalTokenCount 841`,
+  `thoughtsTokenCount 132`, with `promptTokensDetails` split TEXT 442 / AUDIO 205 and
+  `responseTokensDetails` AUDIO 123.
+
+That run also falsified the usage proxy the first draft used. 841 tokens ÷ 50 would have reported **17
+seconds** for a turn whose audio ran about two seconds. Usage is now **measured**: bytes carried, divided by
+the declared sample rates (`RealtimeUsage.seconds` means what the seam says it means). The frame is still the
+trigger; only the number changed.
+
+Still unobserved, and named so it is not mistaken for coverage:
+
+1. **The 15-minute audio-only cap and `goAway`.** The reference states both; a probe that ends in twenty
+   seconds cannot reach them. Session resumption is not implemented, so a long coding turn can be cut off.
+2. **Input transcription.** The probe sent text, not audio, so `inputTranscription` never arrived. It is
+   enabled in the setup and read by the session, but no frame has been seen.
+3. **The full app path.** The probe exercises the adapter's wire — not the browser capture → audio route →
+   session resampler → agent → responder loop. That is `voice_start` plus a spoken turn, and it is the next
+   thing to run.
+4. **Free-tier rate limits and entitlement refusals.** Which seam code a rate limit maps to
+   (`INSUFFICIENT_CREDIT` vs `NOT_ENTITLED` vs a provider error) is unknown until one happens.
+
+Two smaller notes. `toolCallCancellation` handling is defensive — it prevents an answer being written for a
+withdrawn call, and its ordering relative to `interrupted` is unobserved. And `gemini-session.jsonl` is still
+a hand-written script rather than a capture: the live run confirmed the shapes it encodes, but a trimmed
+capture is the honest follow-up (the repository's other fixtures are under a kilobyte, so a raw drain of audio
+blobs would need trimming).
 
 ---
 
 ## 6. How to resume
 
-1. `pnpm install && pnpm test` — the offline suite (1,166 tests) must be green.
+1. `pnpm install && pnpm test` — the offline suite (1,167 tests) must be green.
 2. `pnpm gate` — the full gate, including per-file 100% coverage and the built-artifact smoke.
-3. Section 5 is the live-run checklist; record what the wire actually did in
-   `docs/second-provider-spike.md` (the table that separates ✅ observed from ❓ documented).
+3. §5 lists what a live run has **not** covered yet — the 15-minute cap, input transcription, and the full
+   app path. Record what the next one does in `docs/second-provider-spike.md` (the table that separates ✅
+   observed from ❓ documented).

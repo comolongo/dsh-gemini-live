@@ -55,11 +55,14 @@ const seen = {
   toolCall: false,
   toolReplied: false,
   turnAfterReply: false,
+  turns: 0,
+  audioFrames: 0,
   outputEvents: 0,
   outputText: '',
   inputTranscription: false,
   usage: false,
 }
+const VERBOSE = process.env.GEMINI_PROBE_VERBOSE !== undefined
 const notes = []
 
 console.log(`endpoint  ${ENDPOINT}`)
@@ -68,6 +71,15 @@ console.log('sending   setup (AUDIO modality, ask_coding_agent, both transcripti
 
 const socket = new WebSocket(`${ENDPOINT}?key=${encodeURIComponent(KEY.trim())}`)
 let finished = false
+/**
+ * How long to watch after the tool response.
+ *
+ * The first `turnComplete` after the reply can belong to the turn that *raised* the call, so exiting on it
+ * reports "no audio" for a model that was about to speak. Watching for a bounded window instead makes the
+ * probe's silence meaningful.
+ */
+const WATCH_AFTER_REPLY_MS = Number(process.env.GEMINI_PROBE_WATCH_MS ?? 20_000)
+let watchTimer
 
 const send = (message) => socket.send(JSON.stringify(message))
 
@@ -81,12 +93,14 @@ function finish(why) {
     'setup accepted (setupComplete)': seen.setupComplete,
     'tool call raised for ask_coding_agent': seen.toolCall,
     'tool response accepted (a turn completed after it)': seen.turnAfterReply,
+    'model produced audio': seen.audioFrames > 0,
     'model transcript arrived (outputTranscription)': seen.outputEvents > 0,
   }
   console.log('\n— checks —')
   for (const [name, ok] of Object.entries(checks)) console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}`)
   console.log(`  ${seen.inputTranscription ? 'PASS' : 'info'}  user transcript arrived (inputTranscription)`)
   console.log(`  ${seen.usage ? 'PASS' : 'info'}  usage metadata arrived (usageMetadata)`)
+  console.log(`  info  frames: turns=${seen.turns} audio=${seen.audioFrames} outputTranscription=${seen.outputEvents}`)
 
   if (seen.outputEvents > 0) {
     // The §5 question, answered by counting events against text: equal text means cumulative, growing means
@@ -135,6 +149,8 @@ socket.on('message', (raw) => {
     notes.push(`goAway received: disconnect in ${message.goAway.timeLeft ?? 'an unstated time'}`)
   }
 
+  if (VERBOSE) console.log(`<- frame: ${Object.keys(message).join(',') || '(empty)'}`)
+
   const content = message.serverContent
   if (content !== undefined) {
     if (content.outputTranscription?.text !== undefined) {
@@ -149,19 +165,22 @@ socket.on('message', (raw) => {
     if (content.interrupted === true) console.log('<- interrupted (barge-in)')
     for (const part of content.modelTurn?.parts ?? []) {
       if (part.inlineData !== undefined) {
+        seen.audioFrames += 1
         const bytes = Buffer.from(part.inlineData.data, 'base64').byteLength
-        console.log(`<- audio frame: ${part.inlineData.mimeType}, ${bytes} bytes`)
+        console.log(`<- audio frame ${seen.audioFrames}: ${part.inlineData.mimeType}, ${bytes} bytes`)
       }
       if (part.text !== undefined) {
         notes.push(`modelTurn carried text (${JSON.stringify(part.text)}): the transcription-only assumption needs revisiting`)
       }
     }
     if (content.turnComplete === true) {
-      console.log('<- turnComplete')
+      seen.turns += 1
+      console.log(`<- turnComplete (${seen.turns})`)
       if (seen.toolReplied) seen.turnAfterReply = true
-      // One completed turn after the tool response is all this probe needs.
-      if (seen.turnAfterReply) finish('setup, tool call, tool response and a transcript all observed')
-      else if (!seen.toolCall) finish('the turn completed without ever calling the tool')
+      if (!seen.toolCall && seen.turns === 1) {
+        // A turn that ended without a tool call is a real answer: the model declined to delegate.
+        finish('the first turn completed without ever calling the tool')
+      }
     }
   }
 
@@ -176,6 +195,11 @@ socket.on('message', (raw) => {
       console.log(`-> toolResponse: id=${call.id} name=${call.name}`)
       send(buildToolResponseMessage(call.id, call.name, CANNED_RESULT))
       seen.toolReplied = true
+      // Give the spoken turn a bounded window to arrive, then report what it actually did.
+      clearTimeout(watchTimer)
+      watchTimer = setTimeout(() => {
+        finish(`watched ${WATCH_AFTER_REPLY_MS} ms after the tool response`)
+      }, WATCH_AFTER_REPLY_MS)
     }
   }
 
@@ -185,7 +209,7 @@ socket.on('message', (raw) => {
 
   if (message.usageMetadata !== undefined) {
     seen.usage = true
-    console.log(`<- usageMetadata: totalTokenCount=${message.usageMetadata.totalTokenCount ?? '(absent)'}`)
+    console.log(`<- usageMetadata: ${JSON.stringify(message.usageMetadata)}`)
   }
 })
 

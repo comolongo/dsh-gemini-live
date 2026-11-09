@@ -65,8 +65,21 @@ All notable changes to this project are documented here. The format follows
   until the next one or the turn's end and the last chunk of a turn is the one marked `final`;
   `transcriptDeltas` is now `true`.
 
+### Verified live: 2026-11-09
+
+One real session through `scripts/gemini-probe.mjs` against `gemini-3.8-live` — setup accepted, a `toolCall`
+with `id`/`name`/`args`, the named `toolResponse` accepted, 14 audio frames, and 4 output-transcription events
+that concatenated cleanly. The chunked-vs-cumulative question is answered: **chunked**, as the hold-and-release
+path assumes. What the run did not reach — the 15-minute cap, input transcription, the browser-to-responder
+path, entitlement refusals — is listed in `docs/gemini-live-build.md` §5.
+
 ### Fixed
 
+- **Usage is measured audio seconds, not a token proxy.** The live run reported 841 tokens for a turn whose
+  audio ran about two seconds; the `/50` conversion claimed seventeen. The session now counts the bytes it
+  actually carried (input after resampling, output as the transport decodes it) and divides by the declared
+  sample rates, so `RealtimeUsage.seconds` is the unit the seam says it is. The `usageMetadata` frame still
+  triggers the report; only the number changed.
 - **A flaky settle-journal assertion no longer reddens the gate.** `transcript.settled`'s `waitedMs` was
   pinned to `'0'`; the loop reads a clock, so a loaded machine reports `'1'` with nothing having been
   waited for. It is now asserted as a small number, because a flake that reddens a gate is
@@ -74,9 +87,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Notes for the app profile
 
-The Gemini path is verified **offline**: 78 package tests, the shared conformance suite as a third
+The Gemini path is verified **offline**: 79 package tests, the shared conformance suite as a third
 subject, a keyless replay of the real adapter, and two bundle compositions through the real Loader —
-1,166 tests in total, with the per-file 100% coverage gate green. It has **not** been run against
+1,167 tests in total, with the per-file 100% coverage gate green. It has **not** been run against
 Google's server: every frame shape is documented, not observed. The checklist for that first run,
 including the assumption most likely to be wrong, is `docs/gemini-live-build.md` §5.
 

@@ -355,4 +355,17 @@ wrong in ways a live socket would punish, and one model it named no longer exist
 
 One operational fact from the same read: audio-only Live sessions are capped at 15 minutes, and session
 resumption is not implemented. A long coding turn can be cut off, and the close surfaces as `onClosed`.
-The checklist for the first run is `docs/gemini-live-build.md` §5.
+
+**Verified live, 2026-11-09.** One session through `scripts/gemini-probe.mjs` against `gemini-3.8-live`
+confirmed the shapes above: setup accepted with the tool declaration and both transcription configs, a
+`toolCall` carrying `id`, `name` and `args`, the named `toolResponse` accepted, 14 audio frames at 24 kHz, and
+four `outputTranscription` events whose text concatenated cleanly — so output transcription is **chunked, not
+cumulative**, which is what the hold-and-release path and `transcriptDeltas: true` assume.
+
+That run also settled a number that had been a guess. `usageMetadata` reported 841 tokens for a turn whose
+audio ran about two seconds; the `/50` proxy would have said seventeen. Usage is now **measured** from the
+audio the session carried, divided by the declared sample rates. The frame still triggers the report; only
+the number changed, because the seam's unit is audio seconds and a token count is not one.
+
+What the run did **not** cover is enumerated in `docs/gemini-live-build.md` §5 — the 15-minute cap and
+`goAway`, input transcription (the probe sent text), the browser-to-responder path, and entitlement refusals.
