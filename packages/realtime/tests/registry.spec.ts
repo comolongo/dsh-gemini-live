@@ -262,6 +262,45 @@ describe('model catalogue', () => {
       { id: 'openai-live', name: 'OpenAI Live', description: 'GPT-Live-1 full-duplex voice' },
     ])
   })
+
+  it('carries a declaration of credentials and capabilities through to the registry', () => {
+    // The registry is the only surface `voice_status` and `voice_diagnose` can read, and both fields are
+    // part of the declaration: `configured` is what the credential check branches on, and `capabilities`
+    // is what `requireCapability` reads before refusing a call. Dropping either here makes every route
+    // look undeclared — the honest-looking diagnostic "the route does not say" for a route that did.
+    const { service } = mount()
+    class Declared extends RealtimeAdapter {
+      override providerInfo(provider: string) {
+        return {
+          id: provider,
+          name: 'Gemini Live',
+          configured: true,
+          capabilities: {
+            appendThinking: false,
+            appAuthoredSpeech: true,
+            injectLine: true,
+            functionCalls: true,
+            usageReporting: true,
+            transcriptDeltas: false,
+            inputMute: true,
+            promptUpdate: 'append' as const,
+          },
+        }
+      }
+      override async session(_options: RealtimeSessionOptions): Promise<RealtimeSession> {
+        throw new Error('not used')
+      }
+    }
+    service.registerAdapter(['gemini-live'], new Declared())
+    expect(service.listProviders()).toEqual([
+      {
+        id: 'gemini-live',
+        name: 'Gemini Live',
+        configured: true,
+        capabilities: expect.objectContaining({ functionCalls: true, appAuthoredSpeech: true }),
+      },
+    ])
+  })
 })
 
 describe('append bounds', () => {

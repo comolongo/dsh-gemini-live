@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_APPEND_CHARS } from 'dsh-realtime'
 import { answerDelegation, boundAppend, toSpeech, UNANSWERED_NOTICE, type DelegationAsker } from '../src/bridge.ts'
-import type { AgentTranscriptLine } from '../src/types.ts'
+import type { AgentTranscriptLine, DelegationRequest } from '../src/types.ts'
 
 /** A session that records what was appended to it. */
 function recorder(): {
@@ -242,5 +242,23 @@ describe('answerDelegation', () => {
       transcript: TRANSCRIPT,
       sessionId: 'sess-1',
     }])
+  })
+
+  it('carries an in-band task payload from the provider to the responder', async () => {
+    // In-band function calling (Gemini Live) sends the task as tool arguments, so the responder must
+    // receive it rather than reconstructing intent from a transcript that may not exist yet.
+    const seen: DelegationRequest[] = []
+    const { session } = recorder()
+    await answerDelegation(
+      session,
+      { ...DELEGATION, payload: { task: 'run git status' } },
+      TRANSCRIPT,
+      (request) => { seen.push(request); return Promise.resolve({ text: 'ok' }) },
+      TIMEOUT_MS,
+      () => undefined,
+    )
+
+    expect(seen).toHaveLength(1)
+    expect(seen[0]!.payload).toEqual({ task: 'run git status' })
   })
 })

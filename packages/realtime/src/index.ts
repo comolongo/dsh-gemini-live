@@ -246,9 +246,11 @@ export class RealtimeRuntime extends Service {
       unique.add(provider)
       registrations.push({
         adapter,
-        provider: info.description === undefined
-          ? { id: info.id, name: info.name }
-          : { id: info.id, name: info.name, description: info.description },
+        // The whole declaration, not a subset of it. `configured` and `capabilities` are part of what a
+        // route says about itself, and the registry is the only surface a caller can read them from — a
+        // registry that dropped them made every route look undeclared, which is the failure ADR-011
+        // exists to prevent (and made the credential check in `voice_diagnose` always say "does not say").
+        provider: { ...info },
       })
     }
     return registrations

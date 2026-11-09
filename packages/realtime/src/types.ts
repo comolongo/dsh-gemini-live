@@ -95,10 +95,15 @@ export interface RealtimeDelegation {
   /**
    * Position on the session timeline, in milliseconds.
    *
-   * Note there is deliberately **no task text** here: the protocol sends metadata only, so a
-   * consumer reconstructs intent from transcripts plus its own application state.
+   * For providers that send metadata only (e.g. OpenAI client delegation), a consumer reconstructs
+   * intent from transcripts. For providers with in-band tool calling (e.g. Gemini Live), function arguments
+   * arrive directly in {@link payload}.
    */
   offsetMs: number
+  /**
+   * Optional structured arguments or task payload passed in-band by the voice model (e.g. tool arguments).
+   */
+  payload?: Readonly<Record<string, unknown>>
 }
 
 /** A transcript fragment from either side of the conversation. */

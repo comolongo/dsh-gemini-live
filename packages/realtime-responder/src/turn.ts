@@ -174,7 +174,10 @@ function clip(text: string, maxChars: number): string {
  * @returns the prompt, or an empty string when the transcript carried no text.
  */
 export function promptFrom(request: DelegationRequest, maxChars: number, frame: string): string {
-  const joined = request.transcript
+  const explicitTask = typeof request.payload?.['task'] === 'string' && request.payload['task'].trim().length > 0
+    ? request.payload['task'].trim()
+    : undefined
+  const joined = explicitTask ?? request.transcript
     .map(line => line.text)
     .filter(text => text.length > 0)
     .join('\n')

@@ -29,6 +29,10 @@ export interface DelegationRequest {
   transcript: readonly AgentTranscriptLine[]
   /** The session that raised it, for correlation in logs. */
   sessionId: string
+  /**
+   * Optional structured payload or task parameters passed in-band by the voice model (e.g. tool arguments).
+   */
+  payload?: Readonly<Record<string, unknown>>
 }
 
 /**

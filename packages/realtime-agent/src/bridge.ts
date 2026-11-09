@@ -126,6 +126,7 @@ export async function answerDelegation(
     offsetMs: delegation.offsetMs,
     transcript,
     sessionId: session.id,
+    ...(delegation.payload !== undefined ? { payload: delegation.payload } : {}),
   }
 
   // An unref'd bound, so a timer that loses the race cannot hold the process open — and so there is

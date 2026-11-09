@@ -126,6 +126,17 @@ describe('promptFrom', () => {
     expect(promptFrom(request([{ kind: 'input', text: '日本語のテキスト' }]), FRAME.length + 4, FRAME))
       .toBe(`${FRAME}\n日本語`)
   })
+
+  it('prioritizes explicit task payload over transcript when provided', () => {
+    const req: DelegationRequest = {
+      id: 'item_1',
+      offsetMs: 0,
+      sessionId: 'session_1',
+      transcript: [{ kind: 'input', text: 'noisy transcript fragment' }],
+      payload: { task: 'run unit tests' },
+    }
+    expect(promptFrom(req, 1_000, FRAME)).toBe(`${FRAME}\nrun unit tests`)
+  })
 })
 
 describe('answerText', () => {
