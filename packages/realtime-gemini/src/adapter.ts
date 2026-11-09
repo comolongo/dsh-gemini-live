@@ -137,6 +137,8 @@ export class GeminiLiveAdapter extends RealtimeAdapter {
         session?.receive(msg)
       },
       onAudio: (pcm16) => {
+        // Counted before delivery, so usage measures what the session actually carried.
+        session?.noteOutputAudio(pcm16.byteLength)
         handlers.onAudio?.(pcm16)
       },
       onClose: (reason) => {

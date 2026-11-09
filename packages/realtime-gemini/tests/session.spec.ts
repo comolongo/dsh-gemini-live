@@ -365,7 +365,7 @@ describe('GeminiLiveSession', () => {
     expect(delegations[0]!.payload).toEqual({})
   })
 
-  it('reports cumulative usage when the provider sends usage metadata', () => {
+  it('reports usage as measured audio seconds, not the provider’s token count', () => {
     const usages: RealtimeUsage[] = []
     const session = new GeminiLiveSession({
       id: 'test-session',
@@ -375,11 +375,30 @@ describe('GeminiLiveSession', () => {
       handlers: { onUsage: (u) => usages.push(u) },
     })
 
-    session.receive({ usageMetadata: { totalTokenCount: 100 } })
+    // 48,000 bytes at 24 kHz is 24,000 samples, which the resampler turns into 16,000 samples at 16 kHz —
+    // 32,000 bytes, exactly one second of input. Another 48,000 bytes is one second of output.
+    session.sendAudio(new Uint8Array(48_000))
+    session.noteOutputAudio(48_000)
 
-    // The seam reports audio-seconds; Gemini reports tokens. The adapter's own note says this is a
-    // proxy, so the test pins the arithmetic rather than pretending the unit is measured.
+    // The live run reported 841 tokens for roughly two seconds of audio; a token proxy would have said 17.
+    session.receive({ usageMetadata: { totalTokenCount: 841 } })
+
     expect(usages).toEqual([{ seconds: 2 }])
+  })
+
+  it('reports zero usage when nothing has been carried', () => {
+    const usages: RealtimeUsage[] = []
+    const session = new GeminiLiveSession({
+      id: 'test-session',
+      provider: 'gemini-live',
+      model: 'models/gemini-3.8-live',
+      transport: new MockTransport(),
+      handlers: { onUsage: (u) => usages.push(u) },
+    })
+
+    session.receive({ usageMetadata: {} })
+
+    expect(usages).toEqual([{ seconds: 0 }])
   })
 
   it('marks a transcript fragment final only when the turn is complete', () => {

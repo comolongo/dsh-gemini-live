@@ -76,6 +76,17 @@ export class GeminiLiveSession implements RealtimeSession {
   /** The newest output-transcription chunk, held so the turn's last chunk is the one marked `final`. */
   private heldOutput = ''
 
+  /**
+   * Audio actually carried by this session, in bytes — the basis for usage.
+   *
+   * The provider reports tokens, and converting tokens to seconds is a guess: the first live run reported
+   * 841 tokens for a turn whose audio lasted about two seconds, which a `/50` proxy turned into seventeen.
+   * Bytes over the declared sample rates are measured, so `RealtimeUsage.seconds` means what the seam says it
+   * means. Input is counted after resampling, because that is the audio the provider received.
+   */
+  private inputBytes = 0
+  private outputBytes = 0
+
   constructor(options: GeminiSessionOptions) {
     this.id = options.id
     this.transport = options.transport
@@ -97,8 +108,21 @@ export class GeminiLiveSession implements RealtimeSession {
     if (this.closed || this.muted) return
     const pcm16_16k = this.resampler.process(pcm16)
     if (pcm16_16k.length > 0) {
+      this.inputBytes += pcm16_16k.byteLength
       this.transport.sendAudio(pcm16_16k)
     }
+  }
+
+  /**
+   * Count output audio that the transport delivered, so usage can report measured seconds.
+   *
+   * The transport decodes audio before the session sees it, so this is the session's only view of the model's
+   * side. Called by the adapter's audio handler; a caller driving the session directly may omit it, in which
+   * case usage reports the input it carried and nothing else.
+   * @param byteLength - PCM16 bytes delivered to the listener.
+   */
+  noteOutputAudio(byteLength: number): void {
+    this.outputBytes += byteLength
   }
 
   muteInput(): void {
@@ -213,12 +237,12 @@ export class GeminiLiveSession implements RealtimeSession {
       for (const id of cancelled) this.cancelledCalls.add(id)
     }
 
-    // 5. Handle usage reports if present
-    if (msg.usageMetadata?.totalTokenCount !== undefined) {
-      // Audio-second estimate or rough token-to-seconds proxy
-      this.handlers.onUsage?.({
-        seconds: Math.round(msg.usageMetadata.totalTokenCount / 50),
-      })
+    // 5. Report cumulative usage as measured audio seconds. The frame is the trigger; its token counts are
+    //    not the unit the seam reports in.
+    if (msg.usageMetadata !== undefined) {
+      const seconds = this.inputBytes / 2 / this.started.inputAudio.sampleRate
+        + this.outputBytes / 2 / this.started.outputAudio.sampleRate
+      this.handlers.onUsage?.({ seconds: Math.round(seconds) })
     }
   }
 

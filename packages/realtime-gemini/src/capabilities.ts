@@ -12,8 +12,10 @@
  *   words. It is what narration uses, and it is the weaker promise.
  * - `functionCalls: true` — native in-band function calling (`toolCall` / `toolResponse`), synchronous unless
  *   the declaration opts into `behavior: NON_BLOCKING`.
- * - `usageReporting: true` — reported in `usageMetadata` frames. The seam's unit is audio seconds; this
- *   adapter derives them from the reported token count, which is a proxy the docs do not define as seconds.
+ * - `usageReporting: true` — an `usageMetadata` frame triggers a report, but the number reported is
+ *   **measured**: the audio the session actually carried, divided by the declared sample rates. The
+ *   provider's token count is not audio seconds — the first live run reported 841 tokens for about two
+ *   seconds, and a token proxy would have claimed seventeen.
  * - `transcriptDeltas: true` — text arrives as transcription (`serverContent.outputTranscription` /
  *   `inputTranscription`), and the model's side is **chunked**: the newest chunk is held until the next one
  *   arrives or the turn completes, so the final fragment of a turn is the one marked `final`. The user's side
