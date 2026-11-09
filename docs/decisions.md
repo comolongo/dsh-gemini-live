@@ -284,3 +284,58 @@ like it asserts more.
 **Cost.** No WebRTC or telephony until it is asked for. If a phone-number product appears, this is the
 ADR to reopen, and the reasoning inside it — *transport is a driver concern* — is what should be
 re-examined first.
+
+---
+
+## ADR-014 — Gemini Live is the second duplex provider, and a composition is not a patch
+
+**Decision.** `dsh-realtime-gemini` implements the seam's duplex half on Gemini's `BidiGenerateContent`
+protocol, with `functionCalls: true` and the delegation answer carried by an in-band `toolResponse`. It
+declares `appAuthoredSpeech: true` **because on this provider the application really is the author**: a
+tool result is text the responder wrote, and the model is instructed to summarise it aloud. It declares
+`appendThinking: false` and refuses it, and `injectLine: true` for narration. A delegation may now carry
+a **structured `payload`** — OpenAI's client delegation sends metadata only, Gemini sends the task as
+tool arguments, so `promptFrom` prefers `payload.task` and falls back to the transcript.
+
+The repo ships **two bundle patches**: `cordis.gemini.patch.yml` (what `dsh.bundle.patch` names) and the
+unchanged `cordis.patch.yml`. They are not merged, and the reason is not packaging taste.
+
+**Why two patches.** Both compositions mount the same `dsh-realtime-agent` row, and that row's
+`instructions` field is forwarded verbatim as the session's opening system instruction. The OpenAI
+composition's brief says *you have no tools and no knowledge of this system* — correct there, because
+that protocol delegates by convention and declares no function. The Gemini adapter declares
+`ask_coding_agent` in its setup frame and ships a brief that names it. One shared row cannot hold both,
+and a patch's `config` replaces the schema's defaults wholesale, so the wrong brief is not "merged" into
+the right one — it simply wins. The failure that prevents is silent: the profile boots, the socket opens,
+and the model is told it cannot call the function it was just given. So the brief lives in the adapter
+that declares the tool, and each composition supplies its own route and model. The test that pins this
+asserts the agent row has **no** `instructions` (`packages/realtime-gemini/tests/bundle-patch.spec.ts`).
+
+**Consequence, measured while writing the composition test.** The patch's agent row must also name
+`model: models/gemini-2.0-flash-exp`. The agent forwards its own `model` into
+`RealtimeSessionOptions.model`, which every adapter prefers over its configured default; the agent
+schema's default is `gpt-live-1`, so an omitted `model` would ask Gemini for `models/gpt-live-1` and fail
+during the first session rather than at boot.
+
+**Also settled here.** A cancelled tool call is not answered. When Gemini's own VAD interrupts the model,
+the calls it had asked for arrive in `toolCallCancellation`; an answer for one of those ids is not a
+result the model is waiting on, and a `toolResponse` for an id it has forgotten is a session error
+dressed as an append. The session remembers withdrawn ids and drops answers for them — the delegation
+still settles upstream, so `voice_diagnose` sees an answered turn while nothing was written back, which
+is what "cancelled" means. Barge-in needs nothing else from this adapter: the provider stops its own
+speech and the adapter never queues audio.
+
+**A registry defect this work exposed.** Registering a provider route kept only `id`, `name` and
+`description`, discarding `configured` and `capabilities`. Since `listProviders()` is the only surface
+`voice_status` and `voice_diagnose` read, every route reported "does not say whether it is configured"
+and `requireCapability` had nothing to read — the exact silent-undeclared failure ADR-011 exists to
+prevent. The registry now keeps the whole declaration, and `packages/realtime/tests/registry.spec.ts`
+pins it.
+
+**Cost, stated because it is the honest part.** Every frame shape in this adapter is documented, not
+observed: no run against Google's server has happened. The tables in `docs/second-provider-spike.md` keep
+✅ (observed) and ❓ (documented) apart, and the transcription assumption — that `modelTurn.parts[].text`
+carries transcripts under `responseModalities: ['AUDIO']` — is the one most likely to be wrong and the
+one whose fix (`inputAudioTranscription` / `outputAudioTranscription`) was deliberately **not** written
+blind. A wrong guess there produces a plausible adapter with silent captions; the checklist is
+`docs/gemini-live-build.md` §5.

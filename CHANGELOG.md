@@ -4,6 +4,57 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — Gemini Live
+
+### Added
+
+- **A second duplex provider: Gemini Live.** `dsh-realtime-gemini` 0.1.0. `BidiGenerateContent` over a
+  WebSocket, with in-band function calling: the setup frame declares `ask_coding_agent(task)`, an
+  inbound `toolCall` becomes a delegation whose `payload` is the tool arguments, and the answer returns
+  as a `toolResponse` for the same call id. The adapter declares what it can and cannot do
+  (`functionCalls: true`, `appendThinking: false` and refused, `injectLine: true` for narration), and the
+  shared conformance suite holds that declaration against what the adapter actually does.
+- **A 24 kHz → 16 kHz resampler, with no native dependency.** DSH's capture route and the browser both
+  speak 24 kHz; Gemini's input is 16 kHz. The resampler carries its phase and its last sample across
+  chunks, so a continuous stream does not click or drift at frame boundaries. Two unreachable branches in
+  the first cut were deleted rather than tested: a phase can only be negative after a chunk that recorded
+  a carried sample, so the guard in front of it was dead code.
+- **A keyless replay backend for the second provider.** `dsh-realtime-replay` gains
+  `createGeminiReplaySocket` and a recorded fixture; the *real* adapter and session are driven from it
+  with no credential and no network, which is the same contract ADR-003 gives the first provider.
+- **A bundle composition for Gemini, and it is the default.** `cordis.gemini.patch.yml` mounts the seam,
+  the adapter, the consumer, the responder and the audio route, and is what `dsh.bundle.patch` names.
+  `cordis.patch.yml` remains the GPT-Live-1 composition. They are two patches rather than one because
+  the shared agent row's `instructions` is forwarded verbatim to whichever provider opens the session:
+  the GPT-Live-1 brief says the model has no tools, which would tell Gemini it cannot call the function
+  its setup frame declares. Both compositions boot through the real Cordis Loader with the credential
+  absent, and both are tested that way.
+- **Delegations can carry a structured payload.** OpenAI's client delegation sends metadata only and the
+  consumer reconstructs intent from transcripts; Gemini sends the task as tool arguments. So
+  `RealtimeDelegation.payload` is now part of the seam, the agent forwards it, and `promptFrom` prefers
+  `payload.task` over the transcript. A provider that sends neither is unaffected.
+- **A cancelled tool call is not answered.** `toolCallCancellation` is remembered per session; an answer
+  for a withdrawn call is dropped rather than written back as a `toolResponse` for an id the model has
+  forgotten. Found by a test that asserted the first version's `delete` was enough — it was not: the
+  same id could be answered on two channels, and the second one leaked.
+
+### Fixed
+
+- **The registry dropped what a route declared about itself.** `listProviders()` kept `id`, `name` and
+  `description` but discarded `configured` and `capabilities`, so the only surface `voice_status` and
+  `voice_diagnose` read reported "does not say whether it is configured" for every route — including
+  routes that did — and `requireCapability` had nothing to read. The registry now keeps the whole
+  declaration. This was found by the Gemini composition test, which needs to tell a configured patch
+  from an unconfigured one.
+
+### Notes for the app profile
+
+The Gemini path is verified **offline**: 72 package tests, the shared conformance suite as a third
+subject, a keyless replay of the real adapter, and two bundle compositions through the real Loader —
+1,160 tests in total, with the per-file 100% coverage gate green. It has **not** been run against
+Google's server: every frame shape is documented, not observed. The checklist for that first run,
+including the assumption most likely to be wrong, is `docs/gemini-live-build.md` §5.
+
 ## [0.2.9] — 2026-10-16
 
 ### Changed
