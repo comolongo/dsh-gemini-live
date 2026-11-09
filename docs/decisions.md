@@ -333,9 +333,26 @@ prevent. The registry now keeps the whole declaration, and `packages/realtime/te
 pins it.
 
 **Cost, stated because it is the honest part.** Every frame shape in this adapter is documented, not
-observed: no run against Google's server has happened. The tables in `docs/second-provider-spike.md` keep
-✅ (observed) and ❓ (documented) apart, and the transcription assumption — that `modelTurn.parts[].text`
-carries transcripts under `responseModalities: ['AUDIO']` — is the one most likely to be wrong and the
-one whose fix (`inputAudioTranscription` / `outputAudioTranscription`) was deliberately **not** written
-blind. A wrong guess there produces a plausible adapter with silent captions; the checklist is
-`docs/gemini-live-build.md` §5.
+observed: no run against Google's server has happened.
+
+**Amended 2026-11-09, after re-reading the published reference.** Three shapes the first draft had are
+wrong in ways a live socket would punish, and one model it named no longer exists:
+
+- `models/gemini-2.0-flash-exp` is gone; the Live default is `gemini-3.8-live`. Extended Thinking is *not*
+  advertised here because it requires asynchronous function calling (`behavior: NON_BLOCKING` plus
+  `scheduling`), and this adapter answers with a blocking `toolResponse` — advertising it would promise a
+  mode the delegation path does not implement.
+- Audio is `realtimeInput.audio`; `mediaChunks[]` is deprecated and "all but the first will be ignored", so
+  the old frame was an empty audio stream with no error.
+- A `FunctionResponse` needs the call's `name` and carries `{ result }` directly, not an `output` wrapper.
+  The session now remembers each call's name from its `toolCall`.
+- Text on native-audio models is transcription, not `modelTurn` text: the setup enables
+  `outputAudioTranscription` and `inputAudioTranscription`, and the session holds the newest output chunk
+  until the next one or the turn's end, so the last chunk of a turn is the one marked `final` (hence
+  `transcriptDeltas: true`). Chunk-vs-cumulative text is the one behaviour still unobserved; if it is
+  cumulative the hold-and-release path will duplicate text, and that is the first thing a live run should
+  falsify.
+
+One operational fact from the same read: audio-only Live sessions are capped at 15 minutes, and session
+resumption is not implemented. A long coding turn can be cut off, and the close surfaces as `onClosed`.
+The checklist for the first run is `docs/gemini-live-build.md` §5.

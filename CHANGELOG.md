@@ -47,11 +47,36 @@ All notable changes to this project are documented here. The format follows
   declaration. This was found by the Gemini composition test, which needs to tell a configured patch
   from an unconfigured one.
 
+### Changed — the protocol, re-read against the published reference (2026-11-09)
+
+- **The model is `gemini-3.8-live`.** `models/gemini-2.0-flash-exp` no longer exists; the adapter, the
+  plugin default and the Gemini patch now name the current Live model, and the advertised catalogue lists
+  `gemini-3.8-live` plus the legacy `gemini-3.1-flash-live-preview`. Extended Thinking is deliberately not
+  advertised: it requires asynchronous function calling, and this adapter answers with a blocking
+  `toolResponse`.
+- **Audio frames are `realtimeInput.audio`.** `mediaChunks[]` is deprecated and "all but the first will be
+  ignored" — the frame this adapter sent would have reached the server as an empty audio stream.
+- **Tool responses carry the function's name.** A `FunctionResponse` is matched to its call by `id` *and*
+  `name`, and its `response` is the result object directly. The session remembers each call's name from its
+  `toolCall` and answers with it.
+- **Captions come from transcription.** Native-audio models only emit audio, so the setup enables
+  `outputAudioTranscription` and `inputAudioTranscription` and the session reads
+  `serverContent.outputTranscription` / `inputTranscription`. Output is chunked, so the newest chunk is held
+  until the next one or the turn's end and the last chunk of a turn is the one marked `final`;
+  `transcriptDeltas` is now `true`.
+
+### Fixed
+
+- **A flaky settle-journal assertion no longer reddens the gate.** `transcript.settled`'s `waitedMs` was
+  pinned to `'0'`; the loop reads a clock, so a loaded machine reports `'1'` with nothing having been
+  waited for. It is now asserted as a small number, because a flake that reddens a gate is
+  indistinguishable from a regression.
+
 ### Notes for the app profile
 
-The Gemini path is verified **offline**: 72 package tests, the shared conformance suite as a third
+The Gemini path is verified **offline**: 78 package tests, the shared conformance suite as a third
 subject, a keyless replay of the real adapter, and two bundle compositions through the real Loader —
-1,160 tests in total, with the per-file 100% coverage gate green. It has **not** been run against
+1,166 tests in total, with the per-file 100% coverage gate green. It has **not** been run against
 Google's server: every frame shape is documented, not observed. The checklist for that first run,
 including the assumption most likely to be wrong, is `docs/gemini-live-build.md` §5.
 
