@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_CODING_TOOL,
   buildAudioInputMessage,
+  buildAudioStreamEndMessage,
   buildClientContentMessage,
   buildSetupMessage,
   buildToolResponseMessage,
@@ -79,6 +80,10 @@ describe('wire protocol builders and parsers', () => {
     expect(parsed.setupComplete).toBeDefined()
     expect(parsed.serverContent?.modelTurn?.parts?.[0]?.text).toBe('Hello')
     expect(parsed.serverContent?.turnComplete).toBe(true)
+  })
+
+  it('builds the frame that flushes a paused audio stream', () => {
+    expect(buildAudioStreamEndMessage()).toEqual({ realtimeInput: { audioStreamEnd: true } })
   })
 
   it('defaults the voice to Puck when none is asked for', () => {

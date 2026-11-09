@@ -20,7 +20,9 @@
  *   `inputTranscription`), and the model's side is **chunked**: the newest chunk is held until the next one
  *   arrives or the turn completes, so the final fragment of a turn is the one marked `final`. The user's side
  *   is delivered as the provider sends it (its frequent-update stream is a separate field this adapter ignores).
- * - `inputMute: true` — the adapter stops writing audio frames locally.
+ * - `inputMute: true` — the adapter stops writing audio frames locally, and flushes what the provider has
+ *   already buffered by ending the stream (`audioStreamEnd`), because otherwise the words before a mute can
+ *   sit in the server's buffer unanswered.
  * - `promptUpdate: 'append'` — a mid-session instruction update is written as a `clientContent` turn, which the
  *   reference says is appended to the conversation history; it does not replace the opening instruction.
  *

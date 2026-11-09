@@ -27,7 +27,12 @@ import type {
 import { PcmResampler24to16 } from './resample.ts'
 import type { GeminiTransport } from './transport.ts'
 import type { GeminiServerMessage } from './wire.ts'
-import { DEFAULT_CODING_TOOL, buildClientContentMessage, buildToolResponseMessage } from './wire.ts'
+import {
+  DEFAULT_CODING_TOOL,
+  buildAudioStreamEndMessage,
+  buildClientContentMessage,
+  buildToolResponseMessage,
+} from './wire.ts'
 
 export interface GeminiSessionOptions {
   readonly id: string
@@ -125,8 +130,19 @@ export class GeminiLiveSession implements RealtimeSession {
     this.outputBytes += byteLength
   }
 
+  /**
+   * Stop consuming the microphone, and flush what the provider has already buffered.
+   *
+   * The flush matters: the reference says a paused audio stream should be ended with `audioStreamEnd`, and
+   * without it the words spoken just before a mute can sit in the server's buffer unanswered. Sent only once
+   * audio has actually flowed, because an end-of-stream before the stream existed is not a statement about
+   * anything.
+   */
   muteInput(): void {
     this.muted = true
+    if (this.inputBytes > 0) {
+      this.transport.send(buildAudioStreamEndMessage())
+    }
   }
 
   unmuteInput(): void {

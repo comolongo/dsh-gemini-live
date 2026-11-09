@@ -95,6 +95,19 @@ export interface GeminiRealtimeInputMessage {
   }
 }
 
+/**
+ * Flush what the server has cached for the audio stream.
+ *
+ * The reference: "When the audio stream is paused for more than a second (for example, because the user
+ * switched off the microphone), an `audioStreamEnd` event should be sent to flush any cached audio." Without
+ * it, the utterance before a mute can sit in the server's buffer and never be answered.
+ */
+export interface GeminiAudioStreamEndMessage {
+  readonly realtimeInput: {
+    readonly audioStreamEnd: true
+  }
+}
+
 export interface GeminiClientContentMessage {
   readonly clientContent: {
     readonly turns: readonly {
@@ -123,6 +136,7 @@ export interface GeminiToolResponseMessage {
 export type GeminiClientMessage =
   | GeminiSetupMessage
   | GeminiRealtimeInputMessage
+  | GeminiAudioStreamEndMessage
   | GeminiClientContentMessage
   | GeminiToolResponseMessage
 
@@ -246,6 +260,11 @@ export function buildAudioInputMessage(pcm16_16k: Uint8Array): GeminiRealtimeInp
       },
     },
   }
+}
+
+/** Build the frame that flushes cached audio when the input stream pauses. */
+export function buildAudioStreamEndMessage(): GeminiAudioStreamEndMessage {
+  return { realtimeInput: { audioStreamEnd: true } }
 }
 
 /** Build tool call response message. The `name` is the one the call carried, not a guess. */

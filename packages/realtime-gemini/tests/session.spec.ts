@@ -82,6 +82,29 @@ describe('GeminiLiveSession', () => {
     expect(transport.sentAudio.length).toBe(1)
   })
 
+  it('flushes the buffered stream on mute, but only once audio has flowed', () => {
+    const transport = new MockTransport()
+    const session = new GeminiLiveSession({
+      id: 'test-session',
+      provider: 'gemini-live',
+      model: 'models/gemini-3.8-live',
+      transport,
+      handlers: {},
+    })
+
+    // Nothing has been sent, so there is nothing to flush and an end-of-stream would be a statement about a
+    // stream that never existed.
+    session.muteInput()
+    expect(transport.sent).toEqual([])
+
+    session.unmuteInput()
+    session.sendAudio(new Uint8Array(480))
+    session.muteInput()
+    // Without this, the words said just before the mute can sit in the provider's buffer unanswered — measured
+    // on the audio run, where a whole utterance produced no response until the stream was ended.
+    expect(transport.sent).toEqual([{ realtimeInput: { audioStreamEnd: true } }])
+  })
+
   it('answers a delegation as a toolResponse named after the call that asked', async () => {
     const transport = new MockTransport()
     const session = new GeminiLiveSession({
