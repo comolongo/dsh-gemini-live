@@ -1,0 +1,43 @@
+{
+  "name": "dsh-realtime-gemini",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gemini Live adapter for the realtime seam: full-duplex voice with in-band function calling and 24kHz/16kHz audio.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./resample": {
+      "types": "./lib/resample.d.ts",
+      "default": "./lib/resample.js"
+    },
+    "./capabilities": {
+      "types": "./lib/capabilities.d.ts",
+      "default": "./lib/capabilities.js"
+    },
+    "./wire": {
+      "types": "./lib/wire.d.ts",
+      "default": "./lib/wire.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "dsh-realtime": "workspace:^",
+    "@deepseek-ai/schemastery": "^3.18.3",
+    "ws": "^8.22.0"
+  },
+  "peerDependencies": {
+    "dsh": ">=0.2.0"
+  }
+}

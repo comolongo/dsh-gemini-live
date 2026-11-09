@@ -17,6 +17,9 @@ importers:
       dsh-realtime-audio-ws:
         specifier: workspace:^
         version: link:packages/realtime-audio-ws
+      dsh-realtime-gemini:
+        specifier: workspace:^
+        version: link:packages/realtime-gemini
       dsh-realtime-openai:
         specifier: workspace:^
         version: link:packages/realtime-openai
@@ -126,11 +129,29 @@ importers:
       dsh-realtime-deepgram:
         specifier: workspace:^
         version: link:../realtime-deepgram
+      dsh-realtime-gemini:
+        specifier: workspace:^
+        version: link:../realtime-gemini
       dsh-realtime-openai:
         specifier: workspace:^
         version: link:../realtime-openai
 
   packages/realtime-deepgram:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: ^3.18.3
+        version: 3.18.4
+      dsh:
+        specifier: '>=0.2.0'
+        version: 1.0.1
+      dsh-realtime:
+        specifier: workspace:^
+        version: link:../realtime
+      ws:
+        specifier: ^8.22.0
+        version: 8.22.0
+
+  packages/realtime-gemini:
     dependencies:
       '@deepseek-ai/schemastery':
         specifier: ^3.18.3
@@ -178,6 +199,9 @@ importers:
       dsh-realtime:
         specifier: workspace:^
         version: link:../realtime
+      dsh-realtime-gemini:
+        specifier: workspace:^
+        version: link:../realtime-gemini
       dsh-realtime-openai:
         specifier: workspace:^
         version: link:../realtime-openai

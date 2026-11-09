@@ -10,6 +10,7 @@ import type {
 } from 'dsh-realtime'
 import { AGENT_ENDPOINT, DeepgramAdapter } from 'dsh-realtime-deepgram'
 import type { SocketLike } from 'dsh-realtime-deepgram'
+import { GeminiLiveAdapter } from 'dsh-realtime-gemini'
 import { runConformance } from '../src/index.ts'
 import type { ConformanceSubject, ConformanceWire } from '../src/index.ts'
 
@@ -103,6 +104,70 @@ function deepgramSubject(): ConformanceSubject {
 }
 
 /**
+ * Gemini Live, driven end to end: fake socket with setupComplete handshake.
+ */
+function geminiSubject(): ConformanceSubject {
+  const sockets: FakeSocket[] = []
+  const adapter = new GeminiLiveAdapter(
+    { apiKey: 'test-key', model: 'gemini-2.0-flash-exp' },
+    () => {
+      const socket = new FakeSocket()
+      sockets.push(socket)
+      return socket
+    },
+  )
+
+  const open = async ({ ack }: { ack: boolean }): Promise<ConformanceWire> => {
+    const transcripts: RealtimeTranscript[] = []
+    const opened = adapter.session({
+      provider: 'gemini-live',
+      model: 'gemini-2.0-flash-exp',
+      handlers: { onTranscript: transcript => transcripts.push(transcript) },
+    })
+    const socket = sockets.at(-1)
+    if (socket === undefined) throw new Error('the adapter opened no socket')
+    socket.emit('open')
+    if (ack) socket.emit('message', JSON.stringify({ setupComplete: {} }))
+    const session = await opened
+    const socketForSession = sockets.at(-1)
+    if (socketForSession === undefined) throw new Error('the adapter opened no socket')
+
+    return {
+      session,
+      deliver: (text, _kind) => {
+        transcripts.length = 0
+        socketForSession.emit(
+          'message',
+          JSON.stringify({
+            serverContent: {
+              modelTurn: {
+                parts: [{ text }],
+              },
+              turnComplete: true,
+            },
+          }),
+        )
+        return [...transcripts]
+      },
+      promptWrites: async updates => {
+        const writes: string[] = []
+        for (const update of updates) {
+          const pending = session.appendInstructions(update)
+          const last = socketForSession.writes().at(-1)
+          const text = (last?.['clientContent'] as { turns?: { parts?: { text?: string }[] }[] })?.turns?.[0]?.parts?.[0]?.text
+          if (typeof text === 'string') writes.push(text)
+          await pending
+        }
+        return writes
+      },
+      close: () => session.close(),
+    }
+  }
+
+  return { route: 'gemini-live', adapter, open }
+}
+
+/**
  * A subject whose adapter is whatever the test says it is.
  *
  * The harness's own guard: every check must be shown to FAIL on a subject that breaks it, or a suite that
@@ -188,6 +253,13 @@ describe('conformance — Deepgram', () => {
     // the application cannot author speech — the C-2 silent degradation. The ruling was to split the capability,
     // so the call now refuses and `injectLine` carries narration. The expectation changed because the *behaviour*
     // changed; the assertion was not moved to make it pass.
+    expect(failures).toEqual([])
+  })
+})
+
+describe('conformance — Gemini Live', () => {
+  it('honours its declaration across all conformance checks', async () => {
+    const failures = await runConformance(geminiSubject())
     expect(failures).toEqual([])
   })
 })

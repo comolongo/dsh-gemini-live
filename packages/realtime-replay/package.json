@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "dsh-realtime": "workspace:^",
+    "dsh-realtime-gemini": "workspace:^",
     "dsh-realtime-openai": "workspace:^"
   },
   "peerDependencies": {

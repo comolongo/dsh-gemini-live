@@ -15,6 +15,7 @@
 
 export * as realtime from 'dsh-realtime'
 export * as openaiLive from 'dsh-realtime-openai'
+export * as geminiLive from 'dsh-realtime-gemini'
 export * as realtimeReplay from 'dsh-realtime-replay'
 
 /** The seam's service class, re-exported for convenience — the common import. */

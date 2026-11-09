@@ -1,0 +1,78 @@
+# dsh-gemini-live — the bundle patch a profile mounts for Gemini Live.
+#
+# This is the composition this package's `dsh.bundle.patch` names, so `dsh plugin add` reconciles it
+# into a profile automatically. The GPT-Live-1 composition is still shipped, as
+# `cordis.patch.yml`, and is not a superset of this one — see the note on `instructions` below.
+#
+#   - `dsh-realtime`          the seam. A *service* package: id and name only, no config, no `apply`.
+#   - `dsh-realtime-gemini`   the adapter. Registers the `gemini-live` route and owns the system
+#                             instruction that matches its `ask_coding_agent` tool declaration, so it
+#                             gets `apiKey` and nothing else it can decide for itself.
+#   - `dsh-realtime-agent`    the consumer: holds the session, answers what the model delegates.
+#                             `provider` and `model` must name the Gemini route and model — a patch's
+#                             `config` replaces the schema's defaults wholesale, and the schema's
+#                             defaults are GPT-Live-1's.
+#   - `dsh-realtime-responder` answers a delegation by admitting a turn to a real DSH session. It
+#                             `inject`s `sessionController`, so a profile without that service leaves
+#                             this row visibly waiting, which is the intended outcome.
+#   - `dsh-realtime-audio-ws`  the host end of the client transport: microphone frames in, speech out.
+#
+# Two deliberate omissions, both learned from the other composition:
+#
+# `instructions` is NOT set on the agent row. The provider's own default is written for *its* protocol:
+# the Gemini adapter's default names the `ask_coding_agent` tool it declares in `setup`. The GPT-Live-1
+# brief in `cordis.patch.yml` says the opposite — "you have no tools and no knowledge of this system" —
+# because that protocol has no tool channel and delegates by convention. Supplying that brief here
+# would tell the model it cannot call the very function this patch declares, which is a silent
+# behaviour bug rather than a boot failure. If a profile must override the brief, it belongs in the
+# adapter's `instructions`, which the agent row does not overwrite.
+#
+# The replay backend is likewise not mounted. It plays a recorded session and is a CI tool; mount it
+# per-profile when you want a keyless run:
+#
+#   - insert:
+#       - id: dsh-realtime-replay
+#         name: 'dsh-realtime-replay'
+#         config:
+#           fixture: /absolute/path/to/session.jsonl
+- insert:
+    - id: dsh-realtime
+      name: 'dsh-realtime'
+
+    # `apiKey` is optional in the adapter's schema on purpose, so this composition works unchanged on
+    # a machine with no credential: the route registers, the profile boots, and opening a session
+    # fails with MISSING_CREDENTIAL — an error that names the setting and never the value.
+    - id: dsh-realtime-gemini
+      name: 'dsh-realtime-gemini'
+      config:
+        provider: gemini-live
+        model: models/gemini-2.0-flash-exp
+        voice: Puck
+        apiKey: !!js process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+
+    - id: dsh-realtime-agent
+      name: 'dsh-realtime-agent'
+      config:
+        provider: gemini-live
+        model: models/gemini-2.0-flash-exp
+        # Mounting the bundle must not, by itself, open a socket or spend credit.
+        autoStart: false
+        # The voice model waits this long for an answer; the responder's `answerTimeoutMs` is the other
+        # half of the same budget, and the smaller of the two decides what is actually heard.
+        delegationTimeoutMs: 180000
+
+    - id: dsh-realtime-responder
+      name: 'dsh-realtime-responder'
+      config:
+        # No default on purpose: a responder attached to the wrong session would speak another
+        # conversation's reply, which is worse than not answering at all.
+        sessionId: REPLACE_WITH_THE_SESSION_ID_TO_STEER
+        answerTimeoutMs: 180000
+        maxPromptChars: 4000
+
+    - id: dsh-realtime-audio-ws
+      name: 'dsh-realtime-audio-ws'
+      config:
+        path: /dsh-realtime/audio
+        maxFrameBytes: 480000
+        maxConnections: 1

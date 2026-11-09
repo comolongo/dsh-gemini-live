@@ -27,6 +27,7 @@ import type { ReplayConfig } from './types.ts'
 export * from './types.ts'
 export { loadRecording, parseRecording } from './recording.ts'
 export { ReplayTransportFactory } from './transport.ts'
+export { createGeminiReplaySocket, type ReplaySocket } from './gemini.ts'
 
 /**
  * The credential handed to the adapter.

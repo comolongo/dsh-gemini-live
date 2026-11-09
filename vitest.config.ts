@@ -26,6 +26,7 @@ export default defineConfig({
       'dsh-realtime-openai': pkg('./packages/realtime-openai/src/index.ts'),
       'dsh-realtime-replay': pkg('./packages/realtime-replay/src/index.ts'),
       'dsh-realtime-deepgram': pkg('./packages/realtime-deepgram/src/index.ts'),
+      'dsh-realtime-gemini': pkg('./packages/realtime-gemini/src/index.ts'),
       'dsh-realtime-conformance': pkg('./packages/realtime-conformance/src/index.ts'),
       'dsh-realtime': pkg('./packages/realtime/src/index.ts'),
     },

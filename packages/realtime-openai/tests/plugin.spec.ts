@@ -64,11 +64,24 @@ describe('Config', () => {
 })
 
 describe('apply', () => {
-  it('registers its provider route on the seam', () => {
+  it('registers its provider route on the seam, with the declaration it publishes', () => {
     const ctx = mount()
     plugin.apply(ctx, plugin.Config({ apiKey: 'test-value' }))
+    // The registry carries the whole declaration, not display metadata alone: `configured` is what the
+    // credential check branches on, and `capabilities` is what a caller reads before asking for
+    // something this route cannot do. Dropping them made every route look undeclared.
     expect(ctx.realtime.listProviders()).toEqual([
-      { id: 'openai-live', name: 'OpenAI Live', description: 'GPT-Live-1 full-duplex voice with client delegation' },
+      {
+        id: 'openai-live',
+        name: 'OpenAI Live',
+        description: 'GPT-Live-1 full-duplex voice with client delegation',
+        configured: true,
+        capabilities: expect.objectContaining({
+          appAuthoredSpeech: true,
+          functionCalls: false,
+          promptUpdate: 'append',
+        }),
+      },
     ])
   })
 

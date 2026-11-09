@@ -17,11 +17,16 @@ import * as openaiLive from '../src/index.ts'
 import { Config } from '../src/index.ts'
 
 /**
- * The **shipped** bundle patch, tested.
+ * The **GPT-Live-1** bundle patch, tested.
  *
- * Until this existed, `cordis.patch.yml` was untested text: it is what a user's profile actually
- * mounts, and a mistake in it would surface on that user's machine rather than here. Two failure modes
- * motivated it, and only one of them is loud:
+ * It is still shipped and exported (`./cordis.patch.yml`), but since the Gemini Live composition it is
+ * no longer the one `dsh.bundle.patch` names — `cordis.gemini.patch.yml` is. Both are compositions a
+ * profile can mount, and they are deliberately not one patch: the two protocols need different opening
+ * instructions on the shared agent row, which is the note in the Gemini patch's header.
+ *
+ * Until this existed, `cordis.patch.yml` was untested text: it is what a user's profile mounts, and a
+ * mistake in it would surface on that user's machine rather than here. Two failure modes motivated it,
+ * and only one of them is loud:
  *
  *   - a row named wrongly, or a config key the schema does not declare. This one is **silent**:
  *     schemastery keeps unknown keys, so a typo'd field is not rejected — it is simply ignored, for
@@ -149,7 +154,7 @@ async function withoutCredential<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-describe('the shipped bundle patch', () => {
+describe('the shipped GPT-Live-1 bundle patch', () => {
   it('inserts the seam, the adapter and the consumer, and nothing else', () => {
     const inserted = rows()
     expect(inserted.map(row => row.id)).toEqual(['dsh-realtime', 'dsh-realtime-openai', 'dsh-realtime-agent', 'dsh-realtime-responder', 'dsh-realtime-audio-ws'])

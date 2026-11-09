@@ -1,0 +1,5 @@
+{"t":0,"event":{"setupComplete":{}}}
+{"t":100,"event":{"serverContent":{"modelTurn":{"parts":[{"text":"Checking the repository status for you."}]}}}}
+{"t":200,"event":{"toolCall":{"functionCalls":[{"id":"call_fixture_1","name":"ask_coding_agent","args":{"task":"run git status and check for modified files"}}]}}}
+{"t":800,"event":{"serverContent":{"modelTurn":{"parts":[{"text":"Git status is clean and all 60 test suites are passing."}]},"turnComplete":true}}}
+{"t":1000,"event":{"usageMetadata":{"totalTokenCount":120}}}

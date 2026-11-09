@@ -1,18 +1,20 @@
 {
   "name": "dsh-openai-live",
   "version": "0.6.11",
-  "description": "Full-duplex voice for DeepSeek Harness: a realtime capability seam, a GPT-Live-1 adapter, and a keyless replay backend.",
+  "description": "Full-duplex voice for DeepSeek Harness: a realtime capability seam, Gemini Live and GPT-Live-1 adapters, and a keyless replay backend.",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "main": "./dsh/index.js",
   "exports": {
     ".": "./dsh/index.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
+    "./cordis.gemini.patch.yml": "./cordis.gemini.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
     "dsh",
     "cordis.patch.yml",
+    "cordis.gemini.patch.yml",
     "docs",
     "README.md",
     "README.zh-CN.md",
@@ -51,7 +53,7 @@
   },
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml"
+      "patch": "./cordis.gemini.patch.yml"
     }
   },
   "scripts": {
@@ -74,6 +76,7 @@
   "dependencies": {
     "dsh-realtime": "workspace:^",
     "dsh-realtime-agent": "workspace:^",
+    "dsh-realtime-gemini": "workspace:^",
     "dsh-realtime-openai": "workspace:^",
     "dsh-realtime-replay": "workspace:^",
     "dsh-realtime-responder": "workspace:^",
