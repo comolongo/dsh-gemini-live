@@ -5,9 +5,10 @@ Live adapter and the original GPT-Live-1 adapter, behind one capability seam.**
 
 > **Status: pre-release.** The GPT-Live-1 path is verified against the live API. The Gemini Live path is
 > verified offline — keyless replay, the shared conformance suite, and a bundle composed through the real
-> Loader — and its wire path has been **run against Google's Live API** (one session, 2026-11-09: setup, tool
-> call, tool response, audio and transcription all observed). The full browser-to-responder path has not;
-> what remains is [docs/gemini-live-build.md](docs/gemini-live-build.md) §5. 1,167 tests, a per-file 100% coverage gate
+> Loader — and its wire path has been **run against Google's Live API** (text and audio sessions, 2026-11-09: setup,
+> tool call, tool response, spoken reply, and both transcription directions observed). The full
+> browser-to-responder path has not;
+> what remains is [docs/gemini-live-build.md](docs/gemini-live-build.md) §5. 1,169 tests, a per-file 100% coverage gate
 > that is enforced rather than reported, and a built-artifact smoke that runs the published output under
 > plain `node`. Not yet published to npm.
 

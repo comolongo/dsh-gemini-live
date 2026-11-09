@@ -22,10 +22,16 @@
  *   export GEMINI_API_KEY=…        # or GOOGLE_API_KEY
  *   node scripts/gemini-probe.mjs
  *
+ * To exercise the microphone path instead of a text turn, point it at raw 16 kHz mono PCM16 (the Live docs
+ * ship a sample: hello_are_you_there.pcm). Audio mode checks input transcription and drops the tool checks,
+ * because a greeting is not a delegation:
+ *
+ *   GEMINI_PROBE_AUDIO=/tmp/hello-are-you-there.pcm node scripts/gemini-probe.mjs
+ *
  * Exit codes: 0 = every check that must pass did; 1 = the wire said something else (printed); 2 = no key, or
  * the package is not built.
  */
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import WebSocket from 'ws'
 
 const BUILD = new URL('../packages/realtime-gemini/lib/index.js', import.meta.url)
@@ -33,7 +39,13 @@ if (!existsSync(BUILD)) {
   console.error('the package is not built: run `pnpm build` first (the probe imports the real wire builders)')
   process.exit(2)
 }
-const { buildSetupMessage, buildClientContentMessage, buildToolResponseMessage } = await import(BUILD.href)
+const {
+  buildSetupMessage,
+  buildClientContentMessage,
+  buildToolResponseMessage,
+  buildAudioInputMessage,
+  buildAudioStreamEndMessage,
+} = await import(BUILD.href)
 
 const KEY = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY
 if (KEY === undefined || KEY.trim().length === 0) {
@@ -49,6 +61,9 @@ const ENDPOINT = process.env.GEMINI_PROBE_ENDPOINT
 const CANNED_RESULT = 'probe acknowledged the request; nothing was executed'
 const BUDGET_MS = Number(process.env.GEMINI_PROBE_TIMEOUT_MS ?? 90_000)
 const PROMPT = 'Please run `git status --short` in the workspace and tell me what it says.'
+/** Raw 16 kHz mono PCM16 to send as microphone input instead of a text turn. */
+const AUDIO_PATH = process.env.GEMINI_PROBE_AUDIO
+const AUDIO_MODE = AUDIO_PATH !== undefined && AUDIO_PATH.length > 0
 
 const seen = {
   setupComplete: false,
@@ -89,16 +104,25 @@ function finish(why) {
   finished = true
   try { socket.close() } catch { /* already closing */ }
 
-  const checks = {
-    'setup accepted (setupComplete)': seen.setupComplete,
-    'tool call raised for ask_coding_agent': seen.toolCall,
-    'tool response accepted (a turn completed after it)': seen.turnAfterReply,
-    'model produced audio': seen.audioFrames > 0,
-    'model transcript arrived (outputTranscription)': seen.outputEvents > 0,
-  }
+  const checks = AUDIO_MODE
+    ? {
+        'setup accepted (setupComplete)': seen.setupComplete,
+        'user transcript arrived (inputTranscription)': seen.inputTranscription,
+        'model produced audio': seen.audioFrames > 0,
+        'model transcript arrived (outputTranscription)': seen.outputEvents > 0,
+      }
+    : {
+        'setup accepted (setupComplete)': seen.setupComplete,
+        'tool call raised for ask_coding_agent': seen.toolCall,
+        'tool response accepted (a turn completed after it)': seen.turnAfterReply,
+        'model produced audio': seen.audioFrames > 0,
+        'model transcript arrived (outputTranscription)': seen.outputEvents > 0,
+      }
   console.log('\n— checks —')
   for (const [name, ok] of Object.entries(checks)) console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}`)
-  console.log(`  ${seen.inputTranscription ? 'PASS' : 'info'}  user transcript arrived (inputTranscription)`)
+  // In audio mode the input transcript is a required check, printed above; in text mode it is expected to be
+  // absent, so it stays informational rather than a failure.
+  if (!AUDIO_MODE) console.log(`  info  user transcript arrived (inputTranscription): ${seen.inputTranscription}`)
   console.log(`  ${seen.usage ? 'PASS' : 'info'}  usage metadata arrived (usageMetadata)`)
   console.log(`  info  frames: turns=${seen.turns} audio=${seen.audioFrames} outputTranscription=${seen.outputEvents}`)
 
@@ -135,7 +159,28 @@ socket.on('message', (raw) => {
   if (message.setupComplete !== undefined) {
     seen.setupComplete = true
     console.log('<- setupComplete')
-    send(buildClientContentMessage(PROMPT))
+    if (!AUDIO_MODE) {
+      send(buildClientContentMessage(PROMPT))
+      return
+    }
+    // 100 ms frames at the native 16 kHz rate, paced so the server sees a stream rather than a burst.
+    const pcm = readFileSync(AUDIO_PATH)
+    let offset = 0
+    const frame = 3_200
+    const pump = setInterval(() => {
+      if (offset >= pcm.length) {
+        clearInterval(pump)
+        console.log(`-> sent ${pcm.length} bytes of audio (${(pcm.length / 32_000).toFixed(2)}s)`)
+        // Flush the buffer, or the server keeps waiting for more speech: the reference says a paused stream
+        // should be ended with `audioStreamEnd` before a response is expected.
+        socket.send(JSON.stringify(buildAudioStreamEndMessage()))
+        watchTimer = setTimeout(() => finish(`watched ${WATCH_AFTER_REPLY_MS} ms after the audio stream`), WATCH_AFTER_REPLY_MS)
+        return
+      }
+      const slice = pcm.subarray(offset, Math.min(offset + frame, pcm.length))
+      offset += frame
+      socket.send(JSON.stringify(buildAudioInputMessage(slice)))
+    }, 100)
     return
   }
 
@@ -177,7 +222,7 @@ socket.on('message', (raw) => {
       seen.turns += 1
       console.log(`<- turnComplete (${seen.turns})`)
       if (seen.toolReplied) seen.turnAfterReply = true
-      if (!seen.toolCall && seen.turns === 1) {
+      if (!AUDIO_MODE && !seen.toolCall && seen.turns === 1) {
         // A turn that ended without a tool call is a real answer: the model declined to delegate.
         finish('the first turn completed without ever calling the tool')
       }

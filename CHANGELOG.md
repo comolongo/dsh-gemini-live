@@ -70,8 +70,16 @@ All notable changes to this project are documented here. The format follows
 One real session through `scripts/gemini-probe.mjs` against `gemini-3.8-live` — setup accepted, a `toolCall`
 with `id`/`name`/`args`, the named `toolResponse` accepted, 14 audio frames, and 4 output-transcription events
 that concatenated cleanly. The chunked-vs-cumulative question is answered: **chunked**, as the hold-and-release
-path assumes. What the run did not reach — the 15-minute cap, input transcription, the browser-to-responder
-path, entitlement refusals — is listed in `docs/gemini-live-build.md` §5.
+path assumes.
+
+A second run sent audio (the sample PCM the Live docs publish): `inputTranscription` *"Hey, can you hear me?"*,
+9 audio frames, and the reply *"Yes, I can hear you clearly."* — after one discovery. The first attempt
+produced **nothing at all**, because the server was still waiting for the stream to continue; ending it with
+`realtimeInput.audioStreamEnd` flushed the turn. `muteInput()` now sends that flush once audio has flowed, so
+switching the microphone off mid-sentence does not strand the words in the provider's buffer.
+
+What the runs did not reach — the 15-minute cap, the browser-to-responder path, entitlement refusals — is
+listed in `docs/gemini-live-build.md` §5.
 
 ### Fixed
 
@@ -87,11 +95,12 @@ path, entitlement refusals — is listed in `docs/gemini-live-build.md` §5.
 
 ### Notes for the app profile
 
-The Gemini path is verified **offline**: 79 package tests, the shared conformance suite as a third
-subject, a keyless replay of the real adapter, and two bundle compositions through the real Loader —
-1,167 tests in total, with the per-file 100% coverage gate green. It has **not** been run against
-Google's server: every frame shape is documented, not observed. The checklist for that first run,
-including the assumption most likely to be wrong, is `docs/gemini-live-build.md` §5.
+The Gemini path is verified **offline** — 81 package tests, the shared conformance suite as a third
+subject, a keyless replay of the real adapter, and two bundle compositions through the real Loader, 1,169
+tests in total with the per-file 100% coverage gate green — and its **wire path is verified live** (two
+probe runs on 2026-11-09, text and audio). What is still unproven is the full path from the browser's
+microphone through the audio route and the responder to a spoken answer, plus the 15-minute session cap
+and entitlement refusals; `docs/gemini-live-build.md` §5 lists each one.
 
 ## [0.2.9] — 2026-10-16
 

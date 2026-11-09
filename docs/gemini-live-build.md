@@ -9,7 +9,7 @@ conversation to DeepSeek Harness (DSH) using Gemini Live instead of OpenAI.
 * **Last Updated**: 2026-11-09
 * **Base Commit**: `6f78ffc` (`feat(seam): split appAuthoredSpeech — refuse appendCommentary, add injectLine`)
 * **Test Baseline at the pin**: 60 test suites, 1,081 tests passing offline with zero credentials.
-* **Test Baseline now**: 69 test suites, 1,167 tests passing offline with zero credentials, **per-file
+* **Test Baseline now**: 69 test suites, 1,169 tests passing offline with zero credentials, **per-file
   100% on statements, branches, functions and lines** across `packages/*/src` — the repo's gate, not a
   target.
 
@@ -17,10 +17,10 @@ What is proven and what is not, stated first because the difference matters:
 
 | Claim | Evidence |
 |---|---|
-| The adapter drives a real session end to end | `GeminiLiveAdapter` + `GeminiLiveSession` run against a fake socket in 79 package tests; a recorded fixture drives the *real* adapter keylessly (`gemini-replay.spec.ts`) |
+| The adapter drives a real session end to end | `GeminiLiveAdapter` + `GeminiLiveSession` run against a fake socket in 81 package tests; a recorded fixture drives the *real* adapter keylessly (`gemini-replay.spec.ts`) |
 | The declaration is honoured | The shared conformance suite runs against Gemini as a third subject and reports no divergence |
 | The bundle composes without a credential | `cordis.gemini.patch.yml` boots through the real Cordis Loader with both credential variables absent |
-| **The wire is correct against Google's server** | **PROVEN 2026-11-09.** One live session via `scripts/gemini-probe.mjs`: setup accepted, `toolCall` with id/name/args, `toolResponse` accepted, 14 audio frames and 4 output-transcription chunks, `usageMetadata` with per-modality details. See §5 for what it did *not* cover |
+| **The wire is correct against Google's server** | **PROVEN 2026-11-09, both paths.** A text turn: setup accepted, `toolCall` with id/name/args, `toolResponse` accepted, 14 audio frames, 4 output-transcription chunks. An audio turn: `inputTranscription` *"Hey, can you hear me?"*, 9 audio frames, 2 output-transcription chunks, and the reply *"Yes, I can hear you clearly."* See §5 for what it did *not* cover |
 
 ---
 
@@ -211,12 +211,20 @@ seconds** for a turn whose audio ran about two seconds. Usage is now **measured*
 the declared sample rates (`RealtimeUsage.seconds` means what the seam says it means). The frame is still the
 trigger; only the number changed.
 
+**Second run, same day — audio input.** `GEMINI_PROBE_AUDIO=/tmp/hello-are-you-there.pcm` (the sample the
+Live docs publish, 3.03 s at 16 kHz). The first attempt produced **nothing**: no input transcription, no audio,
+no turn. The frames had been sent and the client sat waiting, while the server was still waiting for more
+speech — the reference's rule that a paused stream must be ended with `audioStreamEnd`. After sending that
+frame the turn completed normally: `inputTranscription` *"Hey, can you hear me?"*, 9 audio frames, two
+`outputTranscription` chunks reading *"Yes, I can hear you clearly."*, and usage metadata again. That discovery
+is now in the adapter: `muteInput()` flushes the stream, once audio has flowed.
+
 Still unobserved, and named so it is not mistaken for coverage:
 
 1. **The 15-minute audio-only cap and `goAway`.** The reference states both; a probe that ends in twenty
    seconds cannot reach them. Session resumption is not implemented, so a long coding turn can be cut off.
-2. **Input transcription.** The probe sent text, not audio, so `inputTranscription` never arrived. It is
-   enabled in the setup and read by the session, but no frame has been seen.
+2. **Input transcription at the seam, with the app's own audio.** Observed on the probe's sample clip, so the
+   wire path is proven — but not yet through the browser capture → audio route → resampler chain.
 3. **The full app path.** The probe exercises the adapter's wire — not the browser capture → audio route →
    session resampler → agent → responder loop. That is `voice_start` plus a spoken turn, and it is the next
    thing to run.
@@ -233,7 +241,7 @@ blobs would need trimming).
 
 ## 6. How to resume
 
-1. `pnpm install && pnpm test` — the offline suite (1,167 tests) must be green.
+1. `pnpm install && pnpm test` — the offline suite (1,169 tests) must be green.
 2. `pnpm gate` — the full gate, including per-file 100% coverage and the built-artifact smoke.
 3. §5 lists what a live run has **not** covered yet — the 15-minute cap, input transcription, and the full
    app path. Record what the next one does in `docs/second-provider-spike.md` (the table that separates ✅

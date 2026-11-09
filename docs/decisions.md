@@ -362,7 +362,13 @@ confirmed the shapes above: setup accepted with the tool declaration and both tr
 four `outputTranscription` events whose text concatenated cleanly — so output transcription is **chunked, not
 cumulative**, which is what the hold-and-release path and `transcriptDeltas: true` assume.
 
-That run also settled a number that had been a guess. `usageMetadata` reported 841 tokens for a turn whose
+A second run sent audio instead of text — the Live docs' sample clip — and the first attempt produced nothing
+at all: the frames were delivered, but the server was still waiting for speech to continue. Ending the stream
+with `realtimeInput.audioStreamEnd` flushed it, and the turn completed with `inputTranscription` *"Hey, can you
+hear me?"* and the reply *"Yes, I can hear you clearly."* That is now the adapter's mute behaviour, because a
+user switching the microphone off mid-sentence is the same situation.
+
+Those runs also settled a number that had been a guess. `usageMetadata` reported 841 tokens for a turn whose
 audio ran about two seconds; the `/50` proxy would have said seventeen. Usage is now **measured** from the
 audio the session carried, divided by the declared sample rates. The frame still triggers the report; only
 the number changed, because the seam's unit is audio seconds and a token count is not one.
