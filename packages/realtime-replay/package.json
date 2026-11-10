@@ -28,10 +28,10 @@
     "testing",
     "keyless"
   ],
-  "homepage": "https://github.com/Travizm/dsh-openai-live",
+  "homepage": "https://github.com/comolongo/dsh-gemini-live",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Travizm/dsh-openai-live.git",
+    "url": "git+https://github.com/comolongo/dsh-gemini-live.git",
     "directory": "packages/realtime-replay"
   },
   "engines": {

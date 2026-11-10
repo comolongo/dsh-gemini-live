@@ -36,13 +36,13 @@
     "gpt-live",
     "delegation"
   ],
-  "homepage": "https://github.com/Travizm/dsh-openai-live",
+  "homepage": "https://github.com/comolongo/dsh-gemini-live",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Travizm/dsh-openai-live.git"
+    "url": "git+https://github.com/comolongo/dsh-gemini-live.git"
   },
   "bugs": {
-    "url": "https://github.com/Travizm/dsh-openai-live/issues"
+    "url": "https://github.com/comolongo/dsh-gemini-live/issues"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

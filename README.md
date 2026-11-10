@@ -12,6 +12,11 @@ Live adapter and the original GPT-Live-1 adapter, behind one capability seam.**
 > that is enforced rather than reported, and a built-artifact smoke that runs the published output under
 > plain `node`. Not yet published to npm.
 
+**A fork of [Travizm/dsh-openai-live](https://github.com/Travizm/dsh-openai-live).** That project
+carries the GPT-Live-1 path and its measured wire record; this one adds the Gemini Live adapter, its
+keyless replay, and the composition that mounts it. Both adapters live behind the same seam, and the
+composition you get by default is Gemini's — see [docs/gemini-live-build.md](docs/gemini-live-build.md).
+
 Two compositions ship, and they are deliberately **not** one patch: the two protocols need different
 opening instructions on the shared agent row.
 
