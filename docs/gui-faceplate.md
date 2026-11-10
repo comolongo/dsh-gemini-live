@@ -225,3 +225,19 @@ The drill levels grow upward from the chip while one is open. Two consequences a
   containment test that pinned the reservation now pins its absence.
 - The chip may overlap page content in the corner. That is the trade the docking rule refused, and it is
   accepted here because the alternative was a band across every page for a surface used in bursts.
+
+## Amendment 2 (2026-11-10) — the surface is one icon in the composer
+
+The chip of the previous amendment was still a surface of its own: a strip of chrome in the corner with a
+meter, buttons and a state line. On the owner's screen it read as a second application sitting over the
+first, which is the objection docking was supposed to answer and could not.
+
+The surface is now a **single microphone icon in the composer's own toolbar**, inserted beside the
+attachments button (`aria-label="Add files or run commands"`) by the injected bootstrap. It is transparent
+until hovered, shows the live state by tinting red, and toggles the session on click. Nothing is reserved,
+nothing floats, and there is no container of ours on the page at all: the `html` row is gone.
+
+The panel the chip carried — meters, drill levels, the settings list — is **not mounted in the app** any
+more. Its stylesheet and rendering stay in the package because the layout gate still reads them and the
+`dsh-realtime-panel` sidebar face may grow back into that space; configuration is reachable through the
+Plugins page and the seam's live settings (`voice_configure`), which is where a control plane belongs.

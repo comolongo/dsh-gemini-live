@@ -40,11 +40,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
-- **The voice surface is a chip, not a band.** The faceplate was a full-width 1U bar pinned to the bottom,
-  and the page gave up a 58 px band to keep it from covering the conversation. Idle most of the time, that
-  was more surface than the control warranted: it is now a compact 34 px chip in the bottom-right corner,
-  floating, reserving nothing, and growing upward only while a drill level is open. The docked design and
-  its reservation are recorded in `docs/gui-faceplate.md`, with the amendment that replaced them.
+- **The voice surface is one icon in the composer.** The faceplate was a full-width 1U bar pinned to the
+  bottom, then a 34 px chip in the corner; both were still a surface of their own sitting over the app. It
+  is now a single microphone icon inserted into the composer's own toolbar beside the attachments button:
+  transparent until hovered, tinted while live, click to toggle. The `html` row is gone, so the plugin puts
+  no container on the page, reserves no band and floats nothing. Meters, drill levels and the settings list
+  are no longer mounted in the app; configuration stays in the Plugins page and the seam's live settings.
 - **The voices are auditionable from the repository.** `docs/voices.html` plays all 30 prebuilt voices, one
   click each, with Google's own one-word character for each. The clips are AAC (~500 KB for 13 rendered so
   far, ~1 MB for all 30) and `pnpm voice-samples` renders any that are missing and rewrites the page, which

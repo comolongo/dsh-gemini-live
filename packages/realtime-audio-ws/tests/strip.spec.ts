@@ -23,24 +23,57 @@ import {
 } from '../src/strip.ts'
 import { renderStrip } from '../src/client/index.ts'
 
-/** A fake page scope: what the bootstrap reads, and what it must not. */
-function scope(over: {
-  client?: unknown
-  readyState?: string
-} = {}) {
-  const mounted: number[] = []
+/**
+ * A fake page scope: the composer, and the client bundle's global.
+ *
+ * The bootstrap inserts one button beside the attachments button and toggles audio through the global the
+ * client bundle publishes. Both are simulated here, because the shipped string is executed rather than
+ * merely read: an inline script nothing runs is the defect class this file exists to catch.
+ */
+function page(over: { client?: unknown; anchor?: boolean } = {}) {
+  const elements: Record<string, any> = {}
+  const order: string[] = []
   const listeners: string[] = []
-  const client = over.client === undefined ? { mount: () => { mounted.push(1) } } : over.client
-  const global = { __dshRealtimeAudio: client }
-  const document = {
-    readyState: over.readyState ?? 'complete',
-    addEventListener: (type: string) => { listeners.push(type) },
+  const anchor = {
+    insertAdjacentElement: (_where: string, element: any) => {
+      elements[element.id] = element
+      order.push(element.id)
+      return element
+    },
   }
-  return { global, document, mounted, listeners }
+  const client = over.client === undefined
+    ? {
+        mount: () => undefined,
+        state: () => ({ kind: 'idle' }),
+        start: () => { listeners.push('start'); return Promise.resolve() },
+        stop: () => { listeners.push('stop') },
+      }
+    : over.client
+  const document = {
+    readyState: 'complete',
+    documentElement: {},
+    querySelector: (selector: string) =>
+      over.anchor === false ? null : (selector.includes('Add files or run commands') ? anchor : null),
+    getElementById: (id: string) => elements[id] ?? null,
+    createElement: (_tag: string) => {
+      const element: any = {
+        id: '', className: '', title: '', type: '', innerHTML: '',
+        dataset: {},
+        attributes: {} as Record<string, string>,
+        previousElementSibling: null,
+        click: null as null | (() => void),
+        setAttribute: (name: string, value: string) => { element.attributes[name] = value },
+        addEventListener: (type: string, handler: () => void) => { if (type === 'click') element.click = handler },
+        parentNode: { removeChild: () => { delete elements[element.id] } },
+      }
+      return element
+    },
+  }
+  return { global: { __dshRealtimeAudio: client }, document, elements, order, toggles: listeners }
 }
 
 /** Run the shipped bootstrap as the page would: a function over the scope it reads. */
-function run(script: string, target: ReturnType<typeof scope>): void {
+function run(script: string, target: ReturnType<typeof page>): void {
   // eslint-disable-next-line no-new-func -- executing our own shipped string is the point of this test.
   new Function('globalThis', 'document', script)(target.global, target.document)
 }
@@ -89,10 +122,11 @@ function classesDefined(css: string): string[] {
 }
 
 describe('stripRows', () => {
-  it('contributes the stylesheet, then the markup, then the bootstrap', () => {
+  it('contributes the stylesheet and the bootstrap, and no markup of its own', () => {
+    // The surface is one icon inserted into the composer, so there is no element of ours on the page: no
+    // container to style, no band to reserve, nothing that can overlap the conversation.
     expect(stripRows()).toEqual([
       { kind: 'style', text: stripStyles() },
-      { kind: 'html', placement: 'body', html: stripMarkup() },
       { kind: 'script', placement: 'body', text: stripBootstrap() },
     ])
   })
@@ -185,27 +219,52 @@ describe('stripRows', () => {
 })
 
 describe('the bootstrap', () => {
-  it('mounts the panel through the client bundle', () => {
-    const page = scope()
-    run(stripBootstrap(), page)
-    expect(page.mounted).toHaveLength(1)
-    expect(page.listeners).toEqual([])
+  it('inserts one microphone icon beside the composer’s attachments button', () => {
+    const target = page()
+    run(stripBootstrap(), target)
+
+    expect(target.order).toEqual(['dsh-realtime-mic'])
+    const mic = target.elements['dsh-realtime-mic']
+    expect(mic.className).toBe('dsh-rt-mic')
+    expect(mic.attributes['aria-label']).toBe('Voice')
+    expect(mic.attributes['data-live']).toBe('false')
   })
 
-  it('does nothing when the bundle has not been materialised yet', () => {
-    // The module table decides when the bundle exists, and it may land after this row. Doing nothing is
-    // correct here: the bundle mounts the panel itself when it applies, and one of the two orderings wins.
-    const page = scope({ client: undefined })
-    expect(() => { run(stripBootstrap(), page) }).not.toThrow()
-    const other = scope({ client: {} })
-    expect(() => { run(stripBootstrap(), other) }).not.toThrow()
-    expect(other.mounted).toEqual([])
+  it('toggles the audio through the client bundle, and repaints from its state', async () => {
+    let kind = 'idle'
+    const calls: string[] = []
+    const target = page({
+      client: {
+        mount: () => undefined,
+        state: () => ({ kind }),
+        start: () => { calls.push('start'); kind = 'live'; return Promise.resolve() },
+        stop: () => { calls.push('stop'); kind = 'idle' },
+      },
+    })
+    run(stripBootstrap(), target)
+    const mic = target.elements['dsh-realtime-mic']!
+
+    mic.click()
+    // The promise's completion repaints, so the icon does not wait for the next re-place.
+    await Promise.resolve()
+    expect(calls).toEqual(['start'])
+    expect(mic.attributes['data-live']).toBe('true')
+    expect(mic.attributes['aria-pressed']).toBe('true')
+
+    mic.click()
+    expect(calls).toEqual(['start', 'stop'])
   })
 
-  it('waits for the body when the page is still parsing it', () => {
-    const page = scope({ readyState: 'loading' })
-    run(stripBootstrap(), page)
-    expect(page.mounted).toHaveLength(1)
-    expect(page.listeners).toEqual(['DOMContentLoaded'])
+  it('does nothing when the composer is not on the page yet, and does not throw without a bundle', () => {
+    const noAnchor = page({ anchor: false })
+    expect(() => { run(stripBootstrap(), noAnchor) }).not.toThrow()
+    expect(noAnchor.order).toEqual([])
+
+    const noBundle = page({ client: undefined })
+    expect(() => { run(stripBootstrap(), noBundle) }).not.toThrow()
+    // It is placed anyway: only the repaint needs the bundle, and a control that appears a moment before the
+    // engine does is better than one that never appears if the bundle lands first.
+    expect(noBundle.order).toEqual(['dsh-realtime-mic'])
   })
 })
+

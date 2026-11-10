@@ -89,7 +89,32 @@ export function stripMarkup(): string {
  */
 export function stripStyles(): string {
   return `
-/* The plate. Opaque last layer: see the module note. */
+/* The one control: a microphone icon in the composer's own toolbar, beside the attachments button. It is
+   deliberately unstyled compared with its neighbours — transparent until hovered — so it reads as part of
+   the composer rather than as a surface the plugin added. */
+.dsh-rt-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: .72;
+}
+.dsh-rt-mic:hover { opacity: 1; background: rgb(127 127 127 / 14%); }
+.dsh-rt-mic svg { width: 17px; height: 17px; }
+.dsh-rt-mic[data-live="true"] { opacity: 1; color: #e0574a; }
+.dsh-rt-mic[data-live="true"] svg { filter: drop-shadow(0 0 3px rgb(224 87 74 / 55%)); }
+
+/* The plate below is the old faceplate's material. It is no longer mounted in the app — the chip's music
+   did not survive the owner's judgement that any surface of its own is too much — but the layout gate and
+   the colour test still read it, and the panel package may mount it again. */
+#dsh-realtime-strip {
 #dsh-realtime-strip {
   /* A chip in the corner, not a band across the page: small enough to ignore, and floating so the app's
      own layout gives up nothing. When a drill level opens it grows upward from this anchor. */
@@ -398,11 +423,41 @@ export function stripStyles(): string {
  * @returns one `script` row's payload.
  */
 export function stripBootstrap(): string {
+  // One icon, inserted beside the composer's attachments button. It is a classic script with no imports,
+  // because it is shipped as an `index-inject` row; the audio engine is the client bundle's, reached through
+  // the global that bundle publishes.
   return [
     ';(function () {',
-    "  function mount() { var G = globalThis.__dshRealtimeAudio; if (G && typeof G.mount === 'function') G.mount() }",
-    '  mount()',
-    "  if (typeof document !== 'undefined' && document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount)",
+    "  var ID = 'dsh-realtime-mic'",
+    "  function api() { return globalThis.__dshRealtimeAudio }",
+    "  function live() { var a = api(); if (!a || typeof a.state !== 'function') return false; var s = a.state(); return !!s && s.kind === 'live' }",
+    "  function paint(b) { if (!b) return; b.setAttribute('data-live', live() ? 'true' : 'false'); b.setAttribute('aria-pressed', live() ? 'true' : 'false') }",
+    "  function toggle() {",
+    "    var a = api(); if (!a) return",
+    "    var done = function () { paint(document.getElementById(ID)) }",
+    "    try { var p = live() ? a.stop() : a.start(); if (p && typeof p.then === 'function') p.then(done, done); else done() } catch (e) { done() }",
+    "  }",
+    "  function icon() {",
+    "    var b = document.createElement('button')",
+    "    b.id = ID; b.type = 'button'; b.className = 'dsh-rt-mic'; b.title = 'Voice'; b.setAttribute('aria-label', 'Voice')",
+    "    b.innerHTML = \"<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><rect x='9' y='2' width='6' height='12' rx='3'></rect><path d='M5 10v1a7 7 0 0 0 14 0v-1'></path><line x1='12' y1='18' x2='12' y2='22'></line></svg>\"",
+    "    b.addEventListener('click', toggle)",
+    "    return b",
+    "  }",
+    "  function place() {",
+    "    var anchor = document.querySelector(\"button[aria-label='Add files or run commands']\")",
+    "    if (!anchor) return",
+    "    var existing = document.getElementById(ID)",
+    "    if (existing) {",
+    "      if (existing.previousElementSibling === anchor) { paint(existing); return }",
+    "      existing.parentNode.removeChild(existing)",
+    "    }",
+    "    var b = icon()",
+    "    anchor.insertAdjacentElement('afterend', b)",
+    "    paint(b)",
+    "  }",
+    "  place()",
+    "  if (typeof MutationObserver !== 'undefined') { try { new MutationObserver(place).observe(document.documentElement, { childList: true, subtree: true }) } catch (e) {} }",
     '})()',
   ].join('\n')
 }
@@ -420,9 +475,10 @@ export function stripBootstrap(): string {
  * @returns the rows, in the order they must execute.
  */
 export function stripRows(): InjectedRow[] {
+  // No markup row: the surface is one icon the bootstrap inserts into the composer, so there is no element
+  // of ours on the page to style, reserve space for, or overlap anything with.
   return [
     { kind: 'style', text: stripStyles() },
-    { kind: 'html', placement: 'body', html: stripMarkup() },
     { kind: 'script', placement: 'body', text: stripBootstrap() },
   ]
 }

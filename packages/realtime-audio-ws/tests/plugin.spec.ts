@@ -18,7 +18,6 @@ import WebSocket from 'ws'
 import { Config, apply } from '../src/index.ts'
 import { INJECTED_KEY } from '../src/injection.ts'
 import { DEFAULT_DIAGNOSTICS_PATH, DEFAULT_PATH, type RealtimeAudioWsConfig } from '../src/types.ts'
-import { STRIP_ELEMENT_ID } from '../src/strip.ts'
 
 let cleanups: Array<() => Promise<void> | void> = []
 afterEach(async () => {
@@ -481,17 +480,15 @@ describe('the audio route', () => {
     expect(table[0]?.value.token).toMatch(/^[A-Za-z0-9_-]{43}$/)
   })
 
-  it('publishes the strip after the settings it reads', async () => {
+  it('publishes the icon and the settings it reads, and no container of its own', async () => {
     const { context } = await mount()
     const rows = injectionRows(context)
-    // The stylesheet, then the markup, then the bootstrap that mounts the panel on it: the table's ordering
-    // guarantee within a placement is what makes a multi-row panel safe, and the settings row has to come
-    // first because the bundle reads it while rendering. A `style` row is a `head` row whatever its position
-    // in the table, which is why it precedes the markup it styles without any ordering trick.
-    expect(rows.map(row => row.kind)).toEqual(['global', 'style', 'html', 'script'])
-    expect(rows[1]?.text).toContain('#dsh-realtime-strip')
-    expect(rows[2]?.html).toContain(`id="${STRIP_ELEMENT_ID}"`)
-    expect(rows[3]?.text).toContain('__dshRealtimeAudio')
+    // The settings row comes first because the bundle reads it while rendering. Then the icon's stylesheet
+    // and the bootstrap that inserts the icon into the composer — and no markup row, because the surface is
+    // an icon inside the host's own toolbar rather than a panel of ours.
+    expect(rows.map(row => row.kind)).toEqual(['global', 'style', 'script'])
+    expect(rows[1]?.text).toContain('.dsh-rt-mic')
+    expect(rows[2]?.text).toContain('__dshRealtimeAudio')
   })
 
   it('accepts the injected token from a caller that cannot carry the cookie', async () => {
