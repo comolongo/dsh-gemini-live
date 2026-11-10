@@ -130,6 +130,8 @@ export interface ClientContextLike {
       readonly value?: { readonly key?: unknown }
     }
   }
+  /** The context's own service lookup, when the host provides one. */
+  readonly get?: (name: string) => unknown
 }
 
 /** Everything this plugin touches outside itself, injectable so every path is testable. */
@@ -1431,7 +1433,12 @@ export function apply(ctx: ClientContextLike): void {
    * the conversation the page *was* on.
    */
   const sessionId = (): string | undefined => {
-    const key = ctx.uiSession?.current?.value?.key
+    // Two ways in, both optional: the service may be a property of this context, or reachable through the
+    // context's own resolver. A client plugin that is not given the service must still mount — a missing
+    // session id costs the steering, not the microphone — so neither lookup may throw.
+    const direct = ctx.uiSession
+    const resolved = direct ?? (ctx.get?.('uiSession') as typeof ctx.uiSession)
+    const key = resolved?.current?.value?.key
     return typeof key === 'string' && key.trim().length > 0 ? key : undefined
   }
   const client = createAudioClient({ ...defaultDeps(), sessionId })

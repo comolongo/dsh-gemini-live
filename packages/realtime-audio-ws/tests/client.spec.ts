@@ -521,6 +521,29 @@ describe('defaultDeps and apply', () => {
   it('asks the voice to follow no session when the page names a blank one', async () => {
     await expect(startWithSession('   ')).resolves.toBe('ws://h:1/dsh-realtime/audio')
   })
+
+  it('finds the session through the context resolver when it is not a property', async () => {
+    const socket = fakeSocket()
+    const graph = fakeGraph()
+    set('location', { protocol: 'http:', host: 'h:1' })
+    set('navigator', { mediaDevices: { getUserMedia: () => Promise.resolve(stream(graph.trackStops)) } })
+    set('AudioContext', function () { return graph.context })
+    let seen = ''
+    set('WebSocket', function (url: string) { seen = url; return socket.socket })
+    // No `uiSession` property: the service is reachable only by name, which is how a client plugin that was
+    // not given the service can still find it.
+    const context = {
+      effect: () => undefined,
+      get: (name: string) => (name === 'uiSession' ? { current: { value: { key: 'session-by-name' } } } : undefined),
+    }
+    apply(context as never)
+    const handle = scope[GLOBAL_KEY] as { start(): Promise<unknown> }
+    const pending = handle.start()
+    await socket.ready
+    socket.fire('onopen')
+    await pending
+    expect(seen).toBe('ws://h:1/dsh-realtime/audio?session=session-by-name')
+  })
 })
 
 // ---- the control channel, from the page's side ---------------------------------------------------------

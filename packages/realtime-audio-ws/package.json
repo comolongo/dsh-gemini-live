@@ -19,10 +19,7 @@
   },
   "dsh": {
     "client": {
-      "platform": "web",
-      "inject": [
-        "uiSession"
-      ]
+      "platform": "web"
     }
   },
   "files": [
