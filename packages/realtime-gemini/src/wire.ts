@@ -39,7 +39,7 @@ export interface GeminiFunctionDeclaration {
 export const DEFAULT_CODING_TOOL: GeminiFunctionDeclaration = Object.freeze({
   name: 'ask_coding_agent',
   description:
-    'Ask the DeepSeek Harness coding agent to perform a task in the workspace (write/edit code, inspect files, run tests, check git status, or execute terminal commands).',
+    'Ask the DeepSeek Harness coding agent to perform a task in the workspace: write or edit code, inspect files, run tests or terminal commands, check git, manage sessions, or use installed tools such as the browser bridge. The agent has the tools; describe the task fully, including any site, file or command the user named.',
   parameters: {
     type: 'OBJECT',
     properties: {

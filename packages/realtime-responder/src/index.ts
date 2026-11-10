@@ -143,6 +143,23 @@ export const inject = ['sessionController', 'realtime']
  * plugin's own prose, and prose is something a deployment may want to word differently — the same
  * judgement that makes `milestonePhrases` configuration instead of a table in the source.
  */
+/**
+ * What the session is told when the microphone closes.
+ *
+ * The counterpart of the relay frame: the frame says what a relayed message is, and this says that relays
+ * have stopped, so a session does not keep formatting answers for an ear that is no longer listening.
+ */
+/**
+ * The question that primes the spoken model with what the session is about.
+ *
+ * Asked once per voice session, of the session being steered, and the answer is injected as context rather
+ * than spoken. Deliberately narrow: the summary must fit in a few sentences, because it becomes part of the
+ * spoken model's instructions and is not the conversation itself.
+ */
+export const VOICE_CONTEXT_TASK = 'Summarize this session for a voice assistant that is about to answer follow-up questions out loud: what the user is working on, decisions made, and the current state. At most four sentences, plain prose, no code, no links, no lists.'
+
+export const VOICE_MODE_ENDED = 'Voice mode ended: the user has stopped speaking and is back on text. Answers no longer need to be spoken aloud or kept to two sentences.'
+
 export const DEFAULT_PROMPT_FRAME = 'Relayed from the voice conversation: the lines below are a spoken exchange, what the user said and what was said back. Treat the last line as the live request and answer it in plain prose that can be read aloud — one or two short sentences, no markdown, no links, no code blocks.'
 
 /** Validated configuration. */
@@ -152,6 +169,7 @@ export const Config = Schema.object({
   answerTimeoutMs: Schema.number().default(45_000).description('How long to wait for the agent before declining'),
   redactSecrets: Schema.array(Schema.string()).default([]).description('Values that must never be spoken or carried on the bus'),
   promptFrame: Schema.string().default(DEFAULT_PROMPT_FRAME).description('Preamble put in front of a relayed request, so the session knows what it is answering'),
+  voiceContext: Schema.boolean().default(false).description('Ask the steered session for a short summary when a voice session opens, and give it to the spoken model as context'),
   // Narration. The words are content — this plugin's own prose, keyed by the tool's name — and the three
   // fields under them are operational and live. `milestonePhrases` is deliberately **not** a live setting:
   // a phrase table is prose a user edits in `cordis.yml` beside `instructions`, and a text box in a call
@@ -487,12 +505,25 @@ export function apply(ctx: Context, config: RealtimeResponderConfig): void {
     yield () => { release() }
   }, 'realtime-responder.steering')
 
+  /**
+   * Voice sessions whose relay frame has already been sent.
+   *
+   * The frame tells the session what a relayed message *is*; saying that once per voice session is enough,
+   * and every later turn then carries only what the person said. Keyed by the **voice** session id, because
+   * that is the conversation the frame describes.
+   */
+  const framed = new Set<string>()
+
+  // Read at mount, and off by default: a summary is an extra turn in the user's conversation, so it is a
+  // choice a profile makes rather than something every voice start silently writes.
+  const voiceContext = config.voiceContext
+
   const run = createTurnRunner({
     // Accessors, not values: see `LiveValues`. This is the change that makes the resolved config an
     // initial state rather than the state.
     sessionId: () => live.sessionId,
     maxPromptChars: () => live.maxPromptChars,
-    frame: () => live.promptFrame,
+    frame: (request) => (request.payload?.['voiceContext'] === true || framed.has(request.sessionId) ? '' : live.promptFrame),
     answerTimeoutMs: () => live.answerTimeoutMs,
     admit: async (text: string): Promise<void> => {
       // A signal per admission. The controller **requires** one — it reads `signal.throwIfAborted()` before it
@@ -533,6 +564,31 @@ export function apply(ctx: Context, config: RealtimeResponderConfig): void {
   })
 
   /**
+   * Prime the spoken model with what this session is about.
+   *
+   * Fired, not awaited, from the agent's `session-opened`: the agent is inside the turn that opened the
+   * voice session, so admitting a prompt now would queue behind that very turn and wait on itself. The
+   * controller queues it, this turn finishes, and the summary arrives a moment later — as context, through
+   * `realtime-agent/context`, never as speech.
+   */
+  ctx.effect(function* () {
+    const dispose = ctx.on('realtime-agent/session-opened', (voiceSessionId: string) => {
+      if (!voiceContext) return
+      void (async () => {
+        const outcome = await run({
+          id: `voice-context-${voiceSessionId}`,
+          offsetMs: 0,
+          sessionId: voiceSessionId,
+          transcript: [],
+          payload: { task: VOICE_CONTEXT_TASK, voiceContext: true },
+        })
+        if (outcome.kind === 'answered') ctx.emit('realtime-agent/context', outcome.text)
+      })()
+    })
+    yield () => { dispose() }
+  }, 'realtime-responder.voice-context')
+
+  /**
    * The delivery path — the two verbs.
    *
    * Every edge is wired here rather than inside the module, which is what keeps `deliver.ts` testable with
@@ -559,6 +615,25 @@ export function apply(ctx: Context, config: RealtimeResponderConfig): void {
       return store === undefined ? false : store.flush(agent.session)
     },
   })
+
+  /**
+   * Voice mode ended.
+   *
+   * One note, not a turn: the session should know the microphone is closed and that its answers are no
+   * longer being spoken, but it should not be asked to reply to that. The entry is removed so a later voice
+   * session frames itself again.
+   */
+  ctx.effect(function* () {
+    const dispose = ctx.on('realtime-agent/session-closed', (sessionId: string) => {
+      if (!framed.delete(sessionId)) return
+      void deliver('note', VOICE_MODE_ENDED, 'voice-mode-end').then((outcome) => {
+        if (outcome.kind === 'unsent' || outcome.kind === 'undurable') {
+          journal.record(`delivery.${outcome.kind}`, { id: 'voice-mode-end' })
+        }
+      })
+    })
+    yield () => { dispose() }
+  }, 'realtime-responder.voice-end')
 
   // A listener is a contribution like any other: the fiber that registered it releases it, so there
   // is no separate teardown path to forget.
@@ -597,6 +672,7 @@ export function apply(ctx: Context, config: RealtimeResponderConfig): void {
 
         const outcome = await run(request)
         recordOutcome(journal, request, outcome)
+        if (outcome.kind === 'answered') framed.add(request.sessionId)
         if (outcome.kind === 'answered') return { text: outcome.text, mode: 'spoken' }
         // Not answered. The reason is reported rather than dropped, and — the whole of S1 story 3 —
         // it is now also spoken. A failure the user cannot hear is one they describe as "it did not

@@ -947,3 +947,139 @@ describe('the settings it declares', () => {
     expect(context.realtime.settings.get('realtime-responder.sessionId')?.choices).toEqual(['session-c'])
   })
 })
+
+describe('the relay frame — stated once per voice session', () => {
+  /** One completed turn on the steered session, emitted the way the harness emits it. */
+  const answerTurn = (context: Context, turn: number, text: string): void => {
+    context.emit('session/event', { id: 'sess-1' } as never, { type: 'turn/start', data: { turn } } as unknown as never)
+    context.emit('session/event', { id: 'sess-1' } as never, {
+      type: 'assistant/message',
+      surfaceOp: 'append',
+      data: { turn, message: { content: [{ type: 'text', text }] } },
+    } as unknown as never)
+  }
+
+  const ask = (sessionId: string, id: string, text: string): DelegationRequest => ({
+    id,
+    offsetMs: 0,
+    sessionId,
+    transcript: [{ kind: 'input', text }],
+  }) as unknown as DelegationRequest
+
+  it('frames the first answered turn, then carries only the words', async () => {
+    const { context, controller } = harness()
+    apply(context, Config({ sessionId: 'sess-1', answerTimeoutMs: 1_000 }) as RealtimeResponderConfig)
+
+    const first = context.serial('realtime-agent/delegation', ask('sess-1', 'item_first', 'what changed?'))
+    await admitted()
+    expect(controller.prompted[0]).toMatchObject({
+      content: [{ type: 'text', text: `${responder.DEFAULT_PROMPT_FRAME}\nwhat changed?` }],
+    })
+    answerTurn(context, 1, 'Two files changed.')
+    await expect(first).resolves.toMatchObject({ text: 'Two files changed.' })
+
+    const second = context.serial('realtime-agent/delegation', ask('sess-1', 'item_second', 'and the tests?'))
+    await admitted()
+    // The frame is not repeated: the session already knows what a relayed message is.
+    expect(controller.prompted[1]).toMatchObject({ content: [{ type: 'text', text: 'and the tests?' }] })
+    answerTurn(context, 2, 'They pass.')
+    await expect(second).resolves.toMatchObject({ text: 'They pass.' })
+  })
+
+  it('asks for a summary when a voice session opens, and emits it as context', async () => {
+    const { context, controller } = harness()
+    apply(context, Config({ sessionId: 'sess-1', answerTimeoutMs: 1_000, voiceContext: true }) as RealtimeResponderConfig)
+    const contexts: string[] = []
+    context.on('realtime-agent/context', (text: string) => { contexts.push(text) })
+
+    context.emit('realtime-agent/session-opened', 'sess-voice')
+    await admitted()
+
+    // No frame on this one: it is not a relayed utterance, it is a question the plugin asks for itself.
+    expect(controller.prompted.at(-1)).toMatchObject({
+      content: [{ type: 'text', text: responder.VOICE_CONTEXT_TASK }],
+    })
+
+    answerTurn(context, 1, 'The user is wiring voice context.')
+    await admitted()
+    await admitted()
+
+    expect(contexts).toEqual(['The user is wiring voice context.'])
+  })
+
+  it('asks for no summary unless the profile opts in', async () => {
+    const { context, controller } = harness()
+    apply(context, Config({ sessionId: 'sess-1', answerTimeoutMs: 1_000 }) as RealtimeResponderConfig)
+
+    context.emit('realtime-agent/session-opened', 'sess-voice')
+    await admitted()
+
+    // A summary is an extra turn in the user's conversation, so it is a choice rather than a default.
+    expect(controller.prompted).toHaveLength(0)
+  })
+
+  it('emits no context when the summary turn goes unanswered', async () => {
+    const { context, controller } = harness()
+    apply(context, Config({ sessionId: 'sess-1', answerTimeoutMs: 5, voiceContext: true }) as RealtimeResponderConfig)
+    const contexts: string[] = []
+    context.on('realtime-agent/context', (text: string) => { contexts.push(text) })
+
+    context.emit('realtime-agent/session-opened', 'sess-voice')
+    await new Promise((resolve) => { setTimeout(resolve, 40) })
+
+    expect(controller.prompted).toHaveLength(1)
+    // A summary nobody answered is silence, not a spoken apology.
+    expect(contexts).toEqual([])
+  })
+
+  it('notes the end of voice mode once, and frames the next voice session again', async () => {
+    const { context, controller } = harness()
+    apply(context, Config({ sessionId: 'sess-1', answerTimeoutMs: 1_000 }) as RealtimeResponderConfig)
+
+    const first = context.serial('realtime-agent/delegation', ask('sess-1', 'item_first', 'what changed?'))
+    await admitted()
+    answerTurn(context, 1, 'Two files changed.')
+    await first
+    const before = sent.length
+
+    context.emit('realtime-agent/session-closed', 'sess-1')
+    await admitted()
+    await admitted()
+
+    // One note, into the next step, and no turn: the session should know the microphone closed, not reply.
+    expect(sent.length).toBe(before + 1)
+    expect(sent.at(-1)?.target).toBe('next-step')
+    expect(sent.at(-1)?.text).toContain('Voice mode ended')
+
+    // A close for a session that was never framed writes nothing.
+    context.emit('realtime-agent/session-closed', 'sess-1')
+    await admitted()
+    expect(sent.length).toBe(before + 1)
+
+    // The next voice session is a different conversation, so it is framed again.
+    const next = context.serial('realtime-agent/delegation', ask('sess-2', 'item_next', 'what now?'))
+    await admitted()
+    expect(controller.prompted.at(-1)).toMatchObject({
+      content: [{ type: 'text', text: `${responder.DEFAULT_PROMPT_FRAME}\nwhat now?` }],
+    })
+    answerTurn(context, 2, 'Nothing yet.')
+    await next
+  })
+
+  it('records a closing note it could not deliver, rather than failing silently', async () => {
+    const { context, controller, journal } = harness()
+    apply(context, Config({ sessionId: 'sess-1', answerTimeoutMs: 1_000 }) as RealtimeResponderConfig)
+
+    const first = context.serial('realtime-agent/delegation', ask('sess-1', 'item_first', 'what changed?'))
+    await admitted()
+    answerTurn(context, 1, 'Two files changed.')
+    await first
+
+    controller.resolvable = false
+    context.emit('realtime-agent/session-closed', 'sess-1')
+    await admitted()
+    await admitted()
+
+    expect(journal.snapshot().some(entry => entry.kind === 'delivery.unsent')).toBe(true)
+  })
+})

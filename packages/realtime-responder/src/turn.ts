@@ -46,7 +46,7 @@ export interface TurnDeps {
    * the compiler's business instead of the author's memory. Read per turn with the session and the
    * budgets beside it, so a change lands on the next turn.
    */
-  readonly frame: () => string
+  readonly frame: (request: DelegationRequest) => string
   /** Bound on waiting for the answer, in milliseconds, read at the start of the turn. */
   readonly answerTimeoutMs: () => number
   /** Admit one prompt. Rejects when the controller refuses it. */
@@ -304,7 +304,7 @@ export function createTurnRunner(deps: TurnDeps): (request: DelegationRequest) =
     // Reading them per event instead would let a change made while a turn is in flight move the very
     // session the answer is expected on, stranding the turn the change was meant to help.
     const sessionId = deps.sessionId()
-    const prompt = promptFrom(request, deps.maxPromptChars(), deps.frame())
+    const prompt = promptFrom(request, deps.maxPromptChars(), deps.frame(request))
     // An empty prompt is a turn the controller would reject, so it is declined before the admission
     // rather than reported as a failure after one.
     if (prompt.length === 0) return { kind: 'declined' }

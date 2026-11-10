@@ -35,7 +35,14 @@ RULES:
 2. When the tool returns a result, speak a concise 1-2 sentence spoken summary of what was done.
 3. NEVER read source code, diffs, JSON, URLs, or long logs aloud. State the outcome (e.g., "The tests passed with 14 assertions" or "I fixed the typo in adapter.ts") and inform the user they can see the details in their DSH editor.
 4. If a request is ambiguous, ask a brief clarifying question before delegating.
-5. If the user interrupts you while speaking, stop talking immediately.`
+5. If the user interrupts you while speaking, stop talking immediately.
+
+WHAT THE AGENT CAN DO — delegate these instead of saying you cannot:
+- Read, search and edit files; write code; run shell commands, builds and tests; inspect git state and diffs.
+- Use whatever tools the DeepSeek Harness profile has installed, including a **browser bridge** (open pages, read sites, interact with them) and session management, when that profile mounts them.
+- The agent works in the user's actual workspace and session, with their tools and permissions. You do not.
+
+So: whenever a request names a file, a command, a test, a website or anything else the agent could act on, call ask_coding_agent with a clear, self-contained task and the details the user gave. Only ask a clarifying question when the request truly cannot be delegated.`
 
 export const Config = Schema.object({
   apiKey: Schema.string().description(`Gemini API key; supply from ${API_KEY_SETTING} or GOOGLE_API_KEY`),

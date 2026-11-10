@@ -38,7 +38,29 @@ All notable changes to this project are documented here. The format follows
   forgotten. Found by a test that asserted the first version's `delete` was enough — it was not: the
   same id could be answered on two channels, and the second one leaked.
 
+### Added
+
+- **Voice context: the spoken model is primed with the session it is steering.** `voiceContext` (responder,
+  opt-in, default off) makes the responder ask the steered session for a four-sentence summary when a voice
+  session opens, and hand it to the agent over `realtime-agent/context`; the agent injects it with
+  `appendInstructions`, so the model knows the conversation without saying the summary aloud. The request is
+  queued behind the turn that opened the voice session, so it cannot deadlock on itself. It is off by
+  default because a summary is an extra turn in the user's conversation, and a profile that wants it says so.
+- **A capability brief for the spoken model.** The Gemini instruction now states what DSH can actually do —
+  read and edit files, run shell commands and tests, inspect git, manage sessions, and use installed tools
+  including the browser bridge — and tells the model to delegate those requests instead of claiming it cannot.
+  The tool description says the same, so "open that site" reaches the agent with a browser-capable tool set
+  rather than a blank refusal.
+
 ### Changed
+
+- **The relay frame is stated once per voice session, not on every message.** The responder framed every
+  relayed request with the same paragraph; it now frames the first answered turn of each voice session and
+  leaves the rest carrying only what the person said, keyed by the *voice* session id. When the voice session
+  closes, the agent emits `realtime-agent/session-closed` and the responder writes one note back into the
+  session ("voice mode ended"), so the session stops formatting for an ear that is gone — and the next voice
+  session frames itself again. A long conversation's frame is still only a sentence away if the session
+  compacts it, which is why the frame remains configurable.
 
 - **The voice surface is one icon in the composer.** The faceplate was a full-width 1U bar pinned to the
   bottom, then a 34 px chip in the corner; both were still a surface of their own sitting over the app. It

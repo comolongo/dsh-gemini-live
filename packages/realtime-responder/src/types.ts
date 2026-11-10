@@ -40,6 +40,8 @@ export interface RealtimeResponderConfig {
    * the panel.
    */
   readonly promptFrame: string
+  /** Ask the steered session for a short summary when a voice session opens. Off unless a profile opts in. */
+  readonly voiceContext: boolean
   /**
    * Spoken phrase for each tool, keyed by the tool name the session reports.
    *

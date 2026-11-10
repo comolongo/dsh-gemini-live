@@ -94,6 +94,27 @@ declare module '@deepseek-ai/cordis' {
      */
     'realtime-agent/audio-flush'(): void
     /**
+     * The voice session closed, and the id it had while it was open.
+     *
+     * Emitted once per close, however it ended. The id is passed because the id is the only thing that
+     * tells a listener which conversation just stopped being spoken — the session object is gone by then.
+     */
+    'realtime-agent/session-closed'(sessionId: string): void
+    /**
+     * A voice session just opened, with its id.
+     *
+     * Emitted once after establishment. The responder uses it to prime the spoken model with a summary of
+     * the session it steers, so the first thing a user says is not answered from a blank context.
+     */
+    'realtime-agent/session-opened'(sessionId: string): void
+    /**
+     * Context for the spoken model that it must **not** say aloud.
+     *
+     * Emitted by whatever produced it — today the responder, with a summary of the steered session — and
+     * appended to the live session as instructions. This is the channel for "know this, do not speak it".
+     */
+    'realtime-agent/context'(text: string): void
+    /**
      * Input audio: capture frames to write to the open session.
      *
      * The host-side half of the microphone path. A capture device belongs in a client half, which
@@ -500,6 +521,8 @@ export function apply(ctx: Context, config: RealtimeAgentConfig): void {
       })
     },
     onClosed: (reason?: string) => {
+      // Captured before the clear: after it there is no object left that knows which conversation ended.
+      const closedVoiceSession = session?.id
       session = undefined
       waiting.clear()
       // The reason travels with the close, and it is the only field that says *why* — a run of five-second
@@ -507,6 +530,7 @@ export function apply(ctx: Context, config: RealtimeAgentConfig): void {
       // transport text, so it is bounded and it is recorded by the plugin that registered the credential as
       // a journal secret, which is what makes the value arm able to redact it.
       journal.record('session.closed', reason === undefined ? {} : { reason: boundedReason(reason) })
+      if (closedVoiceSession !== undefined) ctx.emit('realtime-agent/session-closed', closedVoiceSession)
     },
     onSessionError: (error) => {
       ctx.emit('realtime-agent/error', error)
@@ -573,12 +597,34 @@ export function apply(ctx: Context, config: RealtimeAgentConfig): void {
    * Idempotent on purpose: `voice_start` is safe to call repeatedly, and a model that calls it twice
    * must not end up with two live sessions it cannot see.
    */
+  /**
+   * Carry context into the spoken session without saying it.
+   *
+   * The responder produces a summary of the session being steered; this is the seam that hands it to the
+   * model as instructions. A session that closed between the emit and the append is not an error — there is
+   * simply nobody left to tell.
+   */
+  ctx.effect(function* () {
+    const dispose = ctx.on('realtime-agent/context', (text: string) => {
+      const current = session
+      if (current === undefined) return
+      void current.appendInstructions(text).catch(() => {
+        journal.record('progress.dropped', { id: 'voice-context', channel: 'thinking' })
+      })
+    })
+    yield () => { dispose() }
+  }, 'realtime-agent.context')
+
   const open = async (): Promise<RealtimeSession> => {
     const current = session
     if (current !== undefined) return current
     const opened = await ctx.realtime.session({ ...sessionOptions(), handlers })
     session = opened
     journal.record('session.opened', { provider: config.provider, model: config.model })
+    // Announced after the session exists, so a listener that answers by prompting the steered session has a
+    // live conversation to be appended to. Fired, not awaited: this runs inside the caller's turn, and a
+    // prompt admitted now would queue behind that very turn.
+    ctx.emit('realtime-agent/session-opened', opened.id)
     return opened
   }
 

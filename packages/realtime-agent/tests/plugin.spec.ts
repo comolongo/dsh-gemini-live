@@ -14,6 +14,8 @@ import type { DelegationRequest, RealtimeAgentConfig } from '../src/types.ts'
 /** An adapter that records what the consumer appended, and lets a test raise a delegation. */
 class RecordingAdapter extends RealtimeAdapter {
   readonly appends: Array<{ kind: 'commentary' | 'thinking'; text: string; delegationId: string | undefined }> = []
+  /** Context the agent injected as instructions — never spoken, so it is kept apart from `appends`. */
+  readonly instructions: string[] = []
   readonly sentAudio: Uint8Array[] = []
   handlers: RealtimeSessionHandlers | undefined
   opened = 0
@@ -77,7 +79,11 @@ class RecordingAdapter extends RealtimeAdapter {
         if (adapter.refuseAppend) return Promise.reject(new Error('the provider refused the append'))
         return Promise.resolve()
       },
-      appendInstructions: () => Promise.resolve(),
+      appendInstructions(text) {
+        adapter.instructions.push(text)
+        if (adapter.refuseAppend) return Promise.reject(new Error('the provider refused the append'))
+        return Promise.resolve()
+      },
       close: () => {
         if (adapter.refuseClose) return Promise.reject(new Error('the session is already gone'))
         adapter.closed += 1
@@ -1313,5 +1319,52 @@ describe('answering a session request with its outcome', () => {
     })
     // Still on the bus, because a transport that only emits has nowhere else to learn about it.
     expect(failures).toHaveLength(1)
+  })
+})
+
+describe('voice context — knowledge the model gets without hearing it', () => {
+  it('announces the session it opened, so a responder can prime it', async () => {
+    const { ctx: context } = harness()
+    const opened: string[] = []
+    context.on('realtime-agent/session-opened', (sessionId: string) => { opened.push(sessionId) })
+    apply(context, Config({ provider: 'fake' }) as RealtimeAgentConfig)
+    await tick()
+
+    context.emit('realtime-agent/start')
+    await tick()
+
+    expect(opened).toEqual(['sess-1'])
+  })
+
+  it('carries context into the session as instructions, and never speaks it', async () => {
+    const { ctx: context, adapter } = await started()
+
+    context.emit('realtime-agent/context', 'The user is working on the voice plugin.')
+    await tick()
+
+    expect(adapter.instructions).toEqual(['The user is working on the voice plugin.'])
+    // The whole point of a separate channel: context is not an answer, so nothing is appended for speech.
+    expect(adapter.appends).toEqual([])
+  })
+
+  it('drops context that arrives after the session closed', async () => {
+    const { ctx: context, adapter } = await started()
+
+    context.emit('realtime-agent/stop')
+    await tick()
+    context.emit('realtime-agent/context', 'too late')
+    await tick()
+
+    expect(adapter.instructions).toEqual([])
+  })
+
+  it('records context the provider refused, rather than failing silently', async () => {
+    const { ctx: context, adapter, journal } = await started()
+    adapter.refuseAppend = true
+
+    context.emit('realtime-agent/context', 'the provider will refuse this')
+    await tick()
+
+    expect(journal.snapshot().some(entry => entry.kind === 'progress.dropped')).toBe(true)
   })
 })
