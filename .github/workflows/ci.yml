@@ -60,5 +60,9 @@ jobs:
       - name: Built-artifact composition smoke
         run: pnpm test:built
 
+      # Production scope, because that is what this repository ships. The full audit also walks the
+      # peer/dev packages the harness supplies at runtime (dsh-llm, dsh-skill, dsh-tools), and an advisory
+      # in one of those is not ours to patch: overriding it here would pin a version the host does not use.
+      # An advisory in a dependency we publish still fails this step.
       - name: Dependency audit
-        run: pnpm audit --audit-level high
+        run: pnpm audit --prod --audit-level high

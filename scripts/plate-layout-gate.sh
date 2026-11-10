@@ -18,6 +18,8 @@ cd "$(dirname "$0")/.."
 OUT=${1:-.faceplate-preview}
 CHROME=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}
 PORT=${CDP_PORT:-9223}
+# Optional locally; the workflow sets --no-sandbox for the containerised runner.
+CHROME_FLAGS=${CHROME_FLAGS:-}
 PROFILE=$(mktemp -d)
 DUMP="$OUT/dumps"
 rm -rf "$DUMP"; mkdir -p "$DUMP"
@@ -26,15 +28,26 @@ echo "=== render the fixtures ==="
 node scripts/faceplate-preview.mjs "$OUT" || { echo "render failed"; exit 1; }
 
 echo "=== start headless chrome ==="
-"$CHROME" --headless=new $CHROME_FLAGS --remote-debugging-port="$PORT" --user-data-dir="$PROFILE" \
-  --window-size=1600,1000 about:blank >/dev/null 2>&1 &
+# Chrome's stderr is kept: "did not come up" is a symptom with several causes (no binary, a crashed
+# first run, a slow container), and without the log the only thing CI can say is the symptom.
+CHROME_LOG="$PROFILE/chrome.log"
+"$CHROME" --headless=new $CHROME_FLAGS \
+  --no-first-run --no-default-browser-check --disable-dev-shm-usage --disable-gpu \
+  --remote-debugging-port="$PORT" --user-data-dir="$PROFILE" \
+  --window-size=1600,1000 about:blank >"$CHROME_LOG" 2>&1 &
 CHROME_PID=$!
 trap 'kill $CHROME_PID 2>/dev/null; rm -rf "$PROFILE"' EXIT
-for _ in $(seq 1 20); do
+# 30 s, not 10: a cold CI runner spends seconds creating the profile before the debug port answers, and the
+# ten-second wait this replaced reported that as "chrome did not come up" on the first push that ran it.
+for _ in $(seq 1 60); do
   curl -s -m 1 "http://127.0.0.1:${PORT}/json/version" >/dev/null 2>&1 && break
+  kill -0 "$CHROME_PID" 2>/dev/null || {
+    echo "chrome exited during startup:"; [ -f "$CHROME_LOG" ] && tail -20 "$CHROME_LOG"; exit 3
+  }
   sleep 0.5
 done
-curl -s -m 1 "http://127.0.0.1:${PORT}/json/version" >/dev/null 2>&1 || { echo "chrome did not come up"; exit 3; }
+curl -s -m 1 "http://127.0.0.1:${PORT}/json/version" >/dev/null 2>&1 \
+  || { echo "chrome did not come up after 30 s:"; [ -f "$CHROME_LOG" ] && tail -20 "$CHROME_LOG"; exit 3; }
 
 fail=0; pages=0
 for page in "$OUT"/pane-*.html; do
