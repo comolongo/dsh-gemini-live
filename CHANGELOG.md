@@ -88,6 +88,12 @@ listed in `docs/gemini-live-build.md` §5.
   actually carried (input after resampling, output as the transport decodes it) and divides by the declared
   sample rates, so `RealtimeUsage.seconds` is the unit the seam says it is. The `usageMetadata` frame still
   triggers the report; only the number changed.
+- **The agent's dsh peer ranges admit the current runtime.** `@deepseek-ai/dsh-llm`, `dsh-skill` and
+  `dsh-tools` are required as `^0.1.x || ^0.2.1-rc.3`, because a prerelease range does not admit a newer
+  prerelease: the app ships 0.2.1-rc.3 of all three and DSH's plugin manager refused the whole bundle as
+  incompatible until the ranges were widened. The APIs this package actually uses are unchanged there
+  (`createUserMessage`, `defineTool`, and `createMessage`'s clone-and-freeze semantics were read from the
+  shipped build), so the widening is a range fix, not a compatibility guess.
 - **A flaky settle-journal assertion no longer reddens the gate.** `transcript.settled`'s `waitedMs` was
   pinned to `'0'`; the loop reads a clock, so a loaded machine reports `'1'` with nothing having been
   waited for. It is now asserted as a small number, because a flake that reddens a gate is

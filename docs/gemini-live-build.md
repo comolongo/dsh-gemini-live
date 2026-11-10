@@ -179,6 +179,26 @@ turn, prints every frame the adapter depends on, and answers the chunked-vs-cumu
 question from §5 by printing the events. It executes nothing — the tool result is a canned string — so it
 proves the channel without touching the workspace.
 
+Until the package is published, a profile can mount the checkout directly. `dsh plugin` adds the bundle to
+the profile's `dsh.profile.bundles` automatically, and the app applies it on its next load:
+
+```bash
+REPO=$PWD
+dsh plugin --profile web add \
+  "link:$REPO" \
+  "link:$REPO/packages/realtime" "link:$REPO/packages/realtime-gemini" \
+  "link:$REPO/packages/realtime-agent" "link:$REPO/packages/realtime-responder" \
+  "link:$REPO/packages/realtime-audio-ws"
+```
+
+Two things that must be true for the mounted bundle to *work*, both learned on the first install:
+
+- **The app's own process needs the key.** The patch reads `GEMINI_API_KEY` from the environment at mount,
+  and a process launched before the key existed cannot see it — a session then fails as unconfigured even
+  though the probe in a terminal works. Sourcing a private env file from the launcher is one fix.
+- **The responder's `sessionId` is live but must be set.** It ships as a placeholder, so `voice_diagnose`
+  reports a delegation that nobody would answer until it points at the session you want steered.
+
 The adapter's schema leaves `apiKey` optional on purpose: a profile composes without a key, the
 `gemini-live` route registers, and opening a session fails with `MISSING_CREDENTIAL` — naming the
 setting, never the value. Set `sessionId` on the responder row to the session you want the voice
