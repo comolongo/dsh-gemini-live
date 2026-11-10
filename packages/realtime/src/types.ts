@@ -134,6 +134,14 @@ export interface RealtimeSessionHandlers {
   onUsage?(usage: RealtimeUsage): void
   /** Raw output audio, already decoded from the wire encoding. */
   onAudio?(pcm16: Uint8Array): void
+  /**
+   * The provider reported that the model's current turn was interrupted — the user spoke over it.
+   *
+   * Adapters emit this when the provider says generation was cut short. A consumer that renders audio must
+   * then drop whatever it has queued for playback, or the interruption reaches the ear late. Optional,
+   * because not every provider reports one: silence here means "no claim", not "nothing happened".
+   */
+  onInterrupted?(): void
   /** The session ended. `reason` is provider-supplied when available. */
   onClosed?(reason?: string): void
   /**

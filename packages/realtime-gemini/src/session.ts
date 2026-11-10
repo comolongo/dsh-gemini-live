@@ -233,6 +233,12 @@ export class GeminiLiveSession implements RealtimeSession {
     const output = msg.serverContent?.outputTranscription?.text
     if (output !== undefined && output.length > 0) this.emitOutput(output, false)
     if (msg.serverContent?.turnComplete === true) this.emitOutput(undefined, true)
+    if (msg.serverContent?.interrupted === true) {
+      // The user spoke over the model. Close the held fragment, and say so: audio already queued for playback
+      // is stale the moment this arrives, and only the client can drop it.
+      this.emitOutput(undefined, true)
+      this.handlers.onInterrupted?.()
+    }
 
     // 4. Remember tool calls: the name is needed to answer them, and a withdrawn call must not be answered.
     const functionCalls = msg.toolCall?.functionCalls

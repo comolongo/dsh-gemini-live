@@ -310,6 +310,7 @@ export function apply(ctx: Context, config: RealtimeAudioWsConfig): void {
             attachAudioSocket(client, {
               emitMic: (pcm16) => { ctx.emit('realtime-agent/mic', pcm16) },
               subscribeAudio: (listener) => ctx.on('realtime-agent/audio', listener),
+              subscribeFlush: (listener) => ctx.on('realtime-agent/audio-flush', listener),
               maxFrameBytes: config.maxFrameBytes,
               // The handler is total — every frame produces exactly one reply, and it refuses rather than
               // rejecting — so there is nothing here to catch and nothing here may invent a second reply.

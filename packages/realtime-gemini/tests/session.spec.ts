@@ -507,6 +507,30 @@ describe('GeminiLiveSession', () => {
     expect(transcripts).toEqual([{ kind: 'output', text: 'last thing said', final: true }])
   })
 
+  it('reports an interruption and closes the fragment the model was saying', () => {
+    const transcripts: RealtimeTranscript[] = []
+    let interrupted = 0
+    const session = new GeminiLiveSession({
+      id: 'test-session',
+      provider: 'gemini-live',
+      model: 'models/gemini-3.8-live',
+      transport: new MockTransport(),
+      handlers: {
+        onTranscript: (t) => transcripts.push(t),
+        onInterrupted: () => { interrupted += 1 },
+      },
+    })
+
+    session.receive({ serverContent: { outputTranscription: { text: 'half a sentence' } } })
+    // Held, as any chunk is; the interruption is what closes it.
+    expect(transcripts).toEqual([])
+
+    session.receive({ serverContent: { interrupted: true } })
+
+    expect(interrupted).toBe(1)
+    expect(transcripts).toEqual([{ kind: 'output', text: 'half a sentence', final: true }])
+  })
+
   it('goes quiet once closed: audio, appends and inbound frames are all ignored', async () => {
     const transport = new MockTransport()
     const delegations: RealtimeDelegation[] = []

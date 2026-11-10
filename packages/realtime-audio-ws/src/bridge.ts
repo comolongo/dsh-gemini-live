@@ -28,6 +28,15 @@ export interface AudioSocketBridgeDeps {
    * awaits.
    */
   readonly onControl: (frame: string, reply: (text: string) => void) => void
+  /**
+   * Subscribe to the host's **interruption** signal. Returns the unsubscriber.
+   *
+   * A provider that reports a barge-in says the model stopped speaking, which makes any audio the client
+   * has already scheduled stale. It travels as one text frame on the same socket, because the client
+   * already distinguishes binary audio from text control — and because a second route for one frame would
+   * need its own authentication.
+   */
+  readonly subscribeFlush: (listener: () => void) => () => void
   /** Called exactly once when the bridge stops, however it stops. */
   readonly onDetach: () => void
 }
@@ -82,12 +91,29 @@ export function attachAudioSocket(client: AudioSocket, deps: AudioSocketBridgeDe
     client.send(pcm16)
   })
 
+  /** The flush frame. A constant, because the client parses it and two spellings would be two protocols. */
+  const FLUSH_FRAME = JSON.stringify({ type: 'speech.flush' })
+
+  const unsubscribeFlush = deps.subscribeFlush(() => {
+    // An event already in flight when the socket went away must not write to it. The unsubscriber usually
+    // prevents this; the guard is what makes it true even when the emit was already queued.
+    if (stopped) return
+    // Total, like `reply`: a socket can die between the signal and the write, and a throw here would escape
+    // into an event listener nobody awaits.
+    try {
+      client.send(FLUSH_FRAME)
+    } catch {
+      stop()
+    }
+  })
+
   const stop = (): void => {
     // `close` and `error` both arrive on a failing socket, and the disposer can follow either, so this is
     // the once-only guard rather than a redundant check.
     if (stopped) return
     stopped = true
     unsubscribe()
+    unsubscribeFlush()
     deps.onDetach()
   }
 

@@ -83,6 +83,14 @@ listed in `docs/gemini-live-build.md` §5.
 
 ### Fixed
 
+- **A reply's tail is no longer discarded, and a barge-in now stops what is queued.** Measured on the
+  provider: Gemini's Live API streams a reply about **eleven times faster than real time** (one turn carried
+  3.76 s of audio inside 330 ms), while the client dropped everything past **half a second** of queue. The
+  result was a reply cut off mid-word at the end — the defect that sounded like clipping. The queue bound is
+  now 30 s, a pathological-case guard rather than a latency policy. Barge-in stays immediate because the
+  provider's `interrupted` signal now travels end to end: adapter → seam handler → agent event →
+  `speech.flush` text frame on the audio socket → the client stops what it has scheduled. The journal gains
+  `speech.interrupted`, because "it cut me off" and "it stopped by itself" are otherwise indistinguishable.
 - **Usage is measured audio seconds, not a token proxy.** The live run reported 841 tokens for a turn whose
   audio ran about two seconds; the `/50` conversion claimed seventeen. The session now counts the bytes it
   actually carried (input after resampling, output as the transport decodes it) and divides by the declared

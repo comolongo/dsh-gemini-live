@@ -87,6 +87,13 @@ declare module '@deepseek-ai/cordis' {
      */
     'realtime-agent/audio'(pcm16: Uint8Array): void
     /**
+     * The model's turn was interrupted (barge-in), so output audio already queued for playback is stale.
+     *
+     * Carries nothing: the only fact is that playback should stop now rather than at the end of what the
+     * provider had already sent. Emitted by this plugin when the adapter reports it.
+     */
+    'realtime-agent/audio-flush'(): void
+    /**
      * Input audio: capture frames to write to the open session.
      *
      * The host-side half of the microphone path. A capture device belongs in a client half, which
@@ -201,6 +208,11 @@ export interface HandlerDeps {
   /** Where output audio is delivered. Called once per provider delta. */
   readonly onAudio: (pcm16: Uint8Array) => void
   /**
+   * The provider reported a barge-in. Optional, because not every adapter reports one; a transport that
+   * needs to stop playback is the only consumer.
+   */
+  readonly onInterrupted?: () => void
+  /**
    * Where an accepted append is reported.
    *
    * An acknowledgement, not a delivery: it says the provider took the append, and nothing about
@@ -258,6 +270,7 @@ export function createHandlers(deps: HandlerDeps): RealtimeSessionHandlers {
       })().catch(deps.onSessionError).finally(() => { deps.onDelegationSettled?.(delegation.id) })
     },
     onAudio: (pcm16: Uint8Array): void => { deps.onAudio(pcm16) },
+    onInterrupted: (): void => { deps.onInterrupted?.() },
     onClosed: (reason?: string): void => { deps.onClosed(reason) },
     onError: (error: Error): void => { deps.onSessionError(error) },
   }
@@ -506,6 +519,12 @@ export function apply(ctx: Context, config: RealtimeAgentConfig): void {
       ctx.emit('realtime-agent/audio', pcm16)
       // Handed to the transport: all the host can observe, and no more (invariant 6).
       journal.record('speech.sent', { bytes: String(pcm16.byteLength) })
+    },
+    onInterrupted: () => {
+      // A barge-in. The provider stopped speaking; whatever the client has already scheduled is stale, and
+      // "it cut me off" and "it stopped by itself" look identical from outside, so the record says which.
+      journal.record('speech.interrupted', {})
+      ctx.emit('realtime-agent/audio-flush')
     },
     onDelegationStarted: (delegationId, current) => { waiting.set(delegationId, current) },
     onDelegationSettled: (delegationId) => { waiting.delete(delegationId) },

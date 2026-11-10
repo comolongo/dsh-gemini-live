@@ -275,6 +275,20 @@ describe('the journal the agent writes', () => {
     expect(JSON.stringify(journal.snapshot())).not.toContain(SENTINEL_TEXT)
   })
 
+  it('records an interruption and asks the transport to abandon queued audio', async () => {
+    const { ctx: context, adapter, journal } = await started()
+    const flushes: number[] = []
+    context.on('realtime-agent/audio-flush', () => { flushes.push(1) })
+
+    adapter.handlers?.onInterrupted?.()
+    await tick()
+
+    // The record says the model was cut short, not that it stopped by itself.
+    expect(journal.snapshot().some(entry => entry.kind === 'speech.interrupted')).toBe(true)
+    // And the transport is told, because only it knows what it has already scheduled for playback.
+    expect(flushes).toHaveLength(1)
+  })
+
   it('records the class of a session failure and never its message', async () => {
     const { adapter, journal } = await started()
 

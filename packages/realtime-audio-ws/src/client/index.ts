@@ -41,8 +41,20 @@ export const SAMPLE_RATE = 24_000
 /** Capture chunk in samples. 1024 at 24 kHz is ~43 ms: the 2^10 floor the API allows, so latency is lowest. */
 export const CAPTURE_BUFFER = 1024
 
-/** Backlog past which incoming speech is dropped rather than queued — the same rule the host carries. */
-export const MAX_BACKLOG_SECONDS = 0.5
+/**
+ * Backlog past which incoming speech is dropped rather than queued.
+ *
+ * Raised from 0.5 s after measuring the provider: Gemini's Live API streams a reply roughly **eleven times
+ * faster than real time** (one measured turn carried 3.76 s of audio inside 330 ms). The old cap therefore
+ * discarded the tail of every reply mid-word, which sounded like clipping and was. The bound is still here
+ * because a queue with no ceiling is an unbounded allocation; at 30 s it is a pathological-case guard, not
+ * a latency policy. Barge-in stays snappy because an interruption flushes the queue (`speech.flush`) rather
+ * than truncating it.
+ */
+export const MAX_BACKLOG_SECONDS = 30
+
+/** The text frame that says queued audio is stale. */
+export const FLUSH_FRAME_TYPE = 'speech.flush'
 
 /** Global the client publishes itself on. There is no UI surface yet; this is how it is started. */
 export const GLOBAL_KEY = '__dshRealtimeAudio'
@@ -67,7 +79,13 @@ export interface TrackLike { stop(): void; readonly kind?: string }
 export interface StreamLike { getTracks(): TrackLike[] }
 export interface MediaNodeLike { connect(target: MediaNodeLike | unknown): void; disconnect(): void }
 export interface BufferLike { readonly duration: number; getChannelData(channel: number): Float32Array }
-export interface SourceLike { buffer: unknown; connect(target: unknown): void; start(when?: number): void }
+export interface SourceLike {
+  buffer: unknown
+  connect(target: unknown): void
+  start(when?: number): void
+  /** Stop a scheduled source. Called to abandon audio the listener should no longer hear. */
+  stop(when?: number): void
+}
 export interface ContextLike {
   readonly sampleRate: number
   readonly currentTime: number
@@ -315,6 +333,8 @@ export function createAudioClient(deps: ClientAudioDeps): ClientAudio {
   let processor: MediaNodeLike | undefined
   let silence: MediaNodeLike | undefined
   let playsAt = 0
+  /** Sources already scheduled, so an interruption can stop what has not been heard yet. */
+  const scheduled = new Set<SourceLike>()
   /** The control request waiting for its reply, if any. The host answers one frame with one frame. */
   let pending: { resolve: (reply: ControlReplyLike) => void; reject: (error: Error) => void } | undefined
   /** The tail of the request chain, so two frames are never in flight at once. */
@@ -337,6 +357,7 @@ export function createAudioClient(deps: ClientAudioDeps): ClientAudio {
     processor = undefined
     silence?.disconnect()
     silence = undefined
+    flush()
     for (const track of stream?.getTracks() ?? []) track.stop()
     stream = undefined
     const closing = context
@@ -361,7 +382,27 @@ export function createAudioClient(deps: ClientAudioDeps): ClientAudio {
     source.buffer = buffer
     source.connect(context.destination)
     source.start(at)
+    scheduled.add(source)
     playsAt = at + buffer.duration
+  }
+
+  /**
+   * Stop everything scheduled and reset the timeline.
+   *
+   * Called when the provider reports a barge-in. A source that has already finished may refuse to stop
+   * (the spec allows a stopped source to throw), and that is not a failure: the listener was not going to
+   * hear it anyway.
+   */
+  const flush = (): void => {
+    for (const source of scheduled) {
+      try {
+        source.stop()
+      } catch {
+        // Already ended; nothing to abandon.
+      }
+    }
+    scheduled.clear()
+    playsAt = 0
   }
 
   /** Build the capture graph and start shipping frames. */
@@ -441,16 +482,27 @@ export function createAudioClient(deps: ClientAudioDeps): ClientAudio {
         return
       }
       if (typeof event.data !== 'string') return
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(event.data)
+      } catch {
+        parsed = undefined
+      }
+      // An interruption is unsolicited, so it is handled whether or not a control request is waiting.
+      if (typeof parsed === 'object' && parsed !== null && (parsed as { type?: unknown }).type === FLUSH_FRAME_TYPE) {
+        flush()
+        return
+      }
       const waiting = pending
       pending = undefined
       if (waiting === undefined) return
-      try {
-        waiting.resolve(JSON.parse(event.data) as ControlReplyLike)
-      } catch {
+      if (parsed === undefined) {
         // A reply that is not JSON is a host fault, and the caller has to hear about it rather than be left
         // waiting: the same rule the channel itself follows, one side out.
         waiting.reject(new Error('the host answered a control frame with something that is not a reply'))
+        return
       }
+      waiting.resolve(parsed as ControlReplyLike)
     }
     opened.onclose = () => {
       release()

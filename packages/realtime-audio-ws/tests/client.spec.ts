@@ -62,8 +62,9 @@ function fakeSocket() {
   return { socket, sent, fire, closes: (): number => closes, ready }
 }
 
-function fakeGraph(options: { sampleRate?: number } = {}) {
+function fakeGraph(options: { sampleRate?: number; refuseStop?: boolean } = {}) {
   const started: { at: number; frames: number }[] = []
+  const stops: number[] = []
   const disconnects: string[] = []
   const trackStops: number[] = []
   let contextCloses = 0
@@ -102,6 +103,10 @@ function fakeGraph(options: { sampleRate?: number } = {}) {
       buffer: undefined as unknown,
       connect: () => {},
       start: (at?: number) => { started.push({ at: at ?? 0, frames: lastFrames }) },
+      stop: () => {
+        if (options.refuseStop === true) throw new Error('already stopped')
+        stops.push(1)
+      },
     }),
     close: () => {
       contextCloses += 1
@@ -112,6 +117,7 @@ function fakeGraph(options: { sampleRate?: number } = {}) {
   return {
     context,
     started,
+    stops,
     disconnects,
     trackStops,
     gainValues,
@@ -257,16 +263,47 @@ describe('createAudioClient', () => {
     expect(h.started).toEqual([])
   })
 
-  it('drops speech that is already late instead of queueing it behind', async () => {
+  it('plays a burst that outruns real time instead of discarding its tail', async () => {
     const h = await live()
-    // A one-second frame pushes the playhead a second into the future.
+    // Measured on the provider: a reply can arrive about eleven times faster than it plays. Five seconds of
+    // audio inside one clock tick must all be scheduled — the old half-second bound dropped all but the first.
+    for (let i = 0; i < 5; i += 1) {
+      h.fire('onmessage', Int16Array.from({ length: 24_000 }, () => 1).buffer)
+    }
+    expect(h.started).toHaveLength(5)
+  })
+
+  it('still drops speech when the queue is pathologically far ahead', async () => {
+    const h = await live()
+    // Thirty one-second frames push the playhead thirty seconds ahead; the next one is dropped rather than
+    // buffered, because a queue with no ceiling is an unbounded allocation.
+    for (let i = 0; i < 31; i += 1) {
+      h.fire('onmessage', Int16Array.from({ length: 24_000 }, () => 1).buffer)
+    }
+    expect(h.started).toHaveLength(31)
+    h.fire('onmessage', Int16Array.from([5]).buffer)
+    expect(h.started).toHaveLength(31)
+  })
+
+  it('abandons queued audio when the host reports an interruption', async () => {
+    const h = await live()
     h.fire('onmessage', Int16Array.from({ length: 24_000 }, () => 1).buffer)
     expect(h.started).toHaveLength(1)
-    // The graph's clock now sits further behind the playhead than the bound allows — the case a growing
-    // queue would never recover from.
-    h.setClock(0)
-    h.fire('onmessage', Int16Array.from([5]).buffer)
-    expect(h.started).toHaveLength(1)
+
+    h.fire('onmessage', JSON.stringify({ type: 'speech.flush' }))
+
+    expect(h.stops).toHaveLength(1)
+    // The playhead is reset, so the next reply starts immediately rather than behind the abandoned queue.
+    h.fire('onmessage', Int16Array.from({ length: 24_000 }, () => 1).buffer)
+    expect(h.started).toHaveLength(2)
+    expect(h.started[1]!.at).toBe(0)
+  })
+
+  it('tolerates a source that refuses to stop, because it may have ended already', async () => {
+    const h = await live({ createAudioContext: () => fakeGraph({ refuseStop: true }).context })
+    h.fire('onmessage', Int16Array.from({ length: 24_000 }, () => 1).buffer)
+
+    expect(() => { h.fire('onmessage', JSON.stringify({ type: 'speech.flush' })) }).not.toThrow()
   })
 
   it('releases the device, the graph and the socket on stop, and ignores frames after it', async () => {

@@ -33,6 +33,7 @@ const deps = (over: Partial<Parameters<typeof attachAudioSocket>[1]> = {}) => {
   const unsubscribed: number[] = []
   const control: string[] = []
   let emit: ((pcm16: Uint8Array) => void) | undefined
+  let flushListener: (() => void) | undefined
   return {
     mic,
     detached,
@@ -40,10 +41,16 @@ const deps = (over: Partial<Parameters<typeof attachAudioSocket>[1]> = {}) => {
     control,
     /** Play the host side: deliver output audio as the bus event would. */
     output: (pcm16: Uint8Array): void => { emit?.(pcm16) },
+    /** Play the host side: report an interruption, as the agent's event would. */
+    flush: (): void => { flushListener?.() },
     value: {
       emitMic: (pcm16: Uint8Array) => { mic.push(pcm16) },
       subscribeAudio: (listener: (pcm16: Uint8Array) => void) => {
         emit = listener
+        return () => { unsubscribed.push(1) }
+      },
+      subscribeFlush: (listener: () => void) => {
+        flushListener = listener
         return () => { unsubscribed.push(1) }
       },
       maxFrameBytes: 3,
@@ -158,7 +165,7 @@ describe('attachAudioSocket', () => {
     expect(() => { for (const listener of listeners.get('message') ?? []) listener(Buffer.from('status'), false) }).not.toThrow()
     // The bridge stands down, once, and the detach hook runs exactly as it would for a close.
     expect(harness.detached).toHaveLength(1)
-    expect(harness.unsubscribed).toHaveLength(1)
+    expect(harness.unsubscribed).toHaveLength(2)
   })
 
   it('sends host output audio to the client', () => {
@@ -189,13 +196,44 @@ describe('attachAudioSocket', () => {
     expect(harness.detached).toHaveLength(1)
   })
 
+  it('forwards an interruption as one text frame, and stops forwarding once detached', () => {
+    const { socket, sent } = fakeSocket()
+    const harness = deps()
+    const dispose = attachAudioSocket(socket, harness.value)
+
+    harness.flush()
+
+    expect(sent).toEqual([JSON.stringify({ type: 'speech.flush' })])
+
+    dispose()
+    // An event already in flight when the socket went away must not write to it.
+    harness.flush()
+    expect(sent).toHaveLength(1)
+  })
+
+  it('survives a flush write that fails on a socket that died a moment ago', () => {
+    const sent: (Uint8Array | string)[] = []
+    const socket = {
+      send: () => { throw new Error('socket closed') },
+      close: () => {},
+      terminate: () => {},
+      on: () => socket,
+    } as unknown as AudioSocket
+    const harness = deps()
+    attachAudioSocket(socket, harness.value)
+
+    expect(() => { harness.flush() }).not.toThrow()
+    expect(sent).toEqual([])
+    expect(harness.detached).toHaveLength(1)
+  })
+
   it('unsubscribes exactly once when close and error both arrive', () => {
     const { socket, fire } = fakeSocket()
     const harness = deps()
     attachAudioSocket(socket, harness.value)
     fire('close')
     fire('error', new Error('gone'))
-    expect(harness.unsubscribed).toHaveLength(1)
+    expect(harness.unsubscribed).toHaveLength(2)
     expect(harness.detached).toHaveLength(1)
   })
 
@@ -205,7 +243,7 @@ describe('attachAudioSocket', () => {
     const dispose = attachAudioSocket(socket, harness.value)
     dispose()
     dispose()
-    expect(harness.unsubscribed).toHaveLength(1)
+    expect(harness.unsubscribed).toHaveLength(2)
     expect(harness.detached).toHaveLength(1)
     expect(terminates()).toBe(2)
   })

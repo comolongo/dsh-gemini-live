@@ -86,6 +86,13 @@ export type JournalKind =
   /** Audio was handed to the transport. **Not** a claim that anyone heard it. */
   | 'speech.sent'
   /**
+   * The model's turn was interrupted (barge-in), so queued output audio is stale.
+   *
+   * Recorded because "it cut me off" and "it stopped by itself" are indistinguishable from outside, and
+   * the difference decides whether a person should change how they speak or the plugin should be fixed.
+   */
+  | 'speech.interrupted'
+  /**
    * The provider transcribed some input audio — a **count**, never the words.
    *
    * The counterpart to `speech.sent`, and the entry whose absence made "the voice is broken" unanswerable
