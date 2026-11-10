@@ -111,6 +111,17 @@ export function stripStyles(): string {
 .dsh-rt-mic[data-live="true"] { opacity: 1; color: #e0574a; }
 .dsh-rt-mic[data-live="true"] svg { filter: drop-shadow(0 0 3px rgb(224 87 74 / 55%)); }
 
+/* Five bars, not a microphone: the icon is the conversation's liveness, not an input device. They sit still
+   when the session is closed and breathe while it is live — the only animated thing in the composer, and
+   only when the microphone is actually open. */
+.dsh-rt-bar { transform-box: fill-box; transform-origin: center; }
+.dsh-rt-mic[data-live="true"] .dsh-rt-bar { animation: dsh-rt-bars 900ms ease-in-out infinite alternate; }
+.dsh-rt-mic[data-live="true"] .dsh-rt-bar:nth-child(2) { animation-delay: 110ms; }
+.dsh-rt-mic[data-live="true"] .dsh-rt-bar:nth-child(3) { animation-delay: 220ms; }
+.dsh-rt-mic[data-live="true"] .dsh-rt-bar:nth-child(4) { animation-delay: 330ms; }
+.dsh-rt-mic[data-live="true"] .dsh-rt-bar:nth-child(5) { animation-delay: 440ms; }
+@keyframes dsh-rt-bars { from { transform: scaleY(.4); } to { transform: scaleY(1); } }
+
 /* The plate below is the old faceplate's material. It is no longer mounted in the app — the chip's music
    did not survive the owner's judgement that any surface of its own is too much — but the layout gate and
    the colour test still read it, and the panel package may mount it again. */
@@ -440,7 +451,7 @@ export function stripBootstrap(): string {
     "  function icon() {",
     "    var b = document.createElement('button')",
     "    b.id = ID; b.type = 'button'; b.className = 'dsh-rt-mic'; b.title = 'Voice'; b.setAttribute('aria-label', 'Voice')",
-    "    b.innerHTML = \"<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><rect x='9' y='2' width='6' height='12' rx='3'></rect><path d='M5 10v1a7 7 0 0 0 14 0v-1'></path><line x1='12' y1='18' x2='12' y2='22'></line></svg>\"",
+    "    b.innerHTML = \"<svg viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'><rect class='dsh-rt-bar' x='3' y='10' width='2.4' height='4' rx='1.2'></rect><rect class='dsh-rt-bar' x='7.5' y='7' width='2.4' height='10' rx='1.2'></rect><rect class='dsh-rt-bar' x='12' y='4' width='2.4' height='16' rx='1.2'></rect><rect class='dsh-rt-bar' x='16.5' y='8' width='2.4' height='8' rx='1.2'></rect><rect class='dsh-rt-bar' x='21' y='10.5' width='2' height='3' rx='1'></rect></svg>\"",
     "    b.addEventListener('click', toggle)",
     "    return b",
     "  }",

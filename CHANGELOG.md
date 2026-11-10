@@ -43,7 +43,8 @@ All notable changes to this project are documented here. The format follows
 - **The voice surface is one icon in the composer.** The faceplate was a full-width 1U bar pinned to the
   bottom, then a 34 px chip in the corner; both were still a surface of their own sitting over the app. It
   is now a single microphone icon inserted into the composer's own toolbar beside the attachments button:
-  transparent until hovered, tinted while live, click to toggle. The `html` row is gone, so the plugin puts
+  transparent until hovered, tinted while live, click to toggle — and drawn as five vertical bars that
+  breathe while the session is open, rather than a microphone that says nothing about state. The `html` row is gone, so the plugin puts
   no container on the page, reserves no band and floats nothing. Meters, drill levels and the settings list
   are no longer mounted in the app; configuration stays in the Plugins page and the seam's live settings.
 - **The voices are auditionable from the repository.** `docs/voices.html` plays all 30 prebuilt voices, one
