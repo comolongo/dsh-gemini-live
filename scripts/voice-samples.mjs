@@ -170,7 +170,9 @@ if (KEY.length === 0) {
 
 let hasAfconvert = true
 try {
-  execFileSync('afconvert', ['-h'], { stdio: 'ignore' })
+  // `which`, not `afconvert -h`: the tool exits 2 for its own help, so asking it "are you there" answered
+  // "no" on a machine that has it — which is exactly how this script failed once, silently, on the first run.
+  execFileSync('which', ['afconvert'], { stdio: 'ignore' })
 } catch {
   hasAfconvert = false
   console.error('afconvert is not available: this script is macOS-only, because it writes AAC to keep 30 clips ~1 MB')
