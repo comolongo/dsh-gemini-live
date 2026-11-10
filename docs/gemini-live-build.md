@@ -248,11 +248,10 @@ Still unobserved, and named so it is not mistaken for coverage:
 3. **The full app path.** The probe exercises the adapter's wire — not the browser capture → audio route →
    session resampler → agent → responder loop. That is `voice_start` plus a spoken turn, and it is the next
    thing to run.
-4. **Voice context follows the *configured* session, not the composer's.** The microphone is one icon in a
-   page that holds many sessions, and the page does not expose which session is on screen: the responder
-   steers the id in its config (live-settable, but by name). Priming the model with a summary fixed the
-   "knows nothing about my session" half; making the icon follow the conversation it sits in needs the app to
-   hand the page its current session id, and that is not in the DOM today.
+4. **The icon follows the composer's session now; a page without that service does not.** The client face
+   reads the app's `uiSession` service and passes the current id on the audio socket (`session=…`), and the
+   route steers the responder before opening the voice session. A page that does not mount `uiSession` — the
+   fixture beds, or a different host — names no session and the voice keeps following the configured one.
 5. **Free-tier rate limits and entitlement refusals.** Which seam code a rate limit maps to
    (`INSUFFICIENT_CREDIT` vs `NOT_ENTITLED` vs a provider error) is unknown until one happens.
 

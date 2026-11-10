@@ -14,6 +14,7 @@ import {
   createRouteToken,
   routeAuthority,
   routeInjectionRow,
+  sessionFromUrl,
   tokenFromUrl,
   tokenMatches,
   verdictFor,
@@ -121,5 +122,18 @@ describe('routeInjectionRow', () => {
       authority: undefined,
       token: 'tok',
     })
+  })
+})
+
+describe('sessionFromUrl', () => {
+  it('reads the session a page names, and treats every way of naming none as none', () => {
+    expect(sessionFromUrl('/dsh-realtime/audio?t=abc&session=session-9')).toBe('session-9')
+    expect(sessionFromUrl('/dsh-realtime/audio?session=session-9')).toBe('session-9')
+    // Whitespace around an id is the page's formatting, not part of the id.
+    expect(sessionFromUrl('/dsh-realtime/audio?session=%20session-9%20')).toBe('session-9')
+    expect(sessionFromUrl('/dsh-realtime/audio?t=abc')).toBeUndefined()
+    expect(sessionFromUrl('/dsh-realtime/audio')).toBeUndefined()
+    expect(sessionFromUrl(undefined)).toBeUndefined()
+    expect(sessionFromUrl('/dsh-realtime/audio?session=')).toBeUndefined()
   })
 })

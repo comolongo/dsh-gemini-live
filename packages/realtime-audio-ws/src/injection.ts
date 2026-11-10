@@ -87,6 +87,23 @@ export function createRouteToken(): string {
  * @param url - the request target as `node:http` reports it: pathname plus query.
  * @returns the token, or undefined when absent or empty.
  */
+/**
+ * The session the page says it is showing, from the audio socket's `session` parameter.
+ *
+ * Absent, empty and whitespace all mean "the page did not say" — a page without a session service still gets
+ * a working microphone, just one that follows the responder's configured session.
+ * @param url - the upgrade request's target, query included.
+ * @returns the session id, or undefined when the page named none.
+ */
+export function sessionFromUrl(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined
+  const separator = url.indexOf('?')
+  if (separator < 0) return undefined
+  const value = new URLSearchParams(url.slice(separator + 1)).get('session')
+  const trimmed = value?.trim() ?? ''
+  return trimmed.length === 0 ? undefined : trimmed
+}
+
 export function tokenFromUrl(url: string | undefined): string | undefined {
   if (url === undefined) return undefined
   const query = url.indexOf('?')

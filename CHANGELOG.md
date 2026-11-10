@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The voice icon follows the conversation it sits in.** The client face now reads the app's `uiSession`
+  service, takes the current session id at the moment the microphone is opened, and appends it to the audio
+  socket as `session=…`. The host applies it to `realtime-responder.sessionId` **before** it opens the voice
+  session — the route opens one on the same connect, so a steer sent afterwards would race the session it was
+  meant to direct. A page without a session service (or with a blank id) simply names none, and the voice
+  keeps following the configured session. The steering is journaled as `config.changed`, and a refusal (for
+  example a profile with no responder mounted) is recorded rather than swallowed while still granting the
+  microphone.
+
 - **A second duplex provider: Gemini Live.** `dsh-realtime-gemini` 0.1.0. `BidiGenerateContent` over a
   WebSocket, with in-band function calling: the setup frame declares `ask_coding_agent(task)`, an
   inbound `toolCall` becomes a delegation whose `payload` is the tool arguments, and the answer returns

@@ -428,6 +428,45 @@ describe('the audio route', () => {
     expect(starts).toHaveLength(1)
   })
 
+  it('steers the responder at the session the page names, before the session opens', async () => {
+    const { context, url } = await mount()
+    const order: string[] = []
+    context.realtime.settings.register('realtime-responder', [{
+      field: 'sessionId',
+      kind: 'string',
+      scope: 'live',
+      describe: 'The DSH session the voice conversation steers',
+      get: () => 'sess-1',
+      set: (value: string) => { order.push(`steer:${value}`) },
+    }])
+    context.on('realtime-agent/start', () => { order.push('start') })
+
+    const client = new WebSocket(`${url()}?session=sess-9`)
+    cleanups.push(() => { client.terminate() })
+    await once(client, 'open')
+    await new Promise((resolve) => { setTimeout(resolve, 20) })
+
+    // The ordering is the feature: the route opens the session on connect, so a steer afterwards would race it.
+    expect(order).toEqual(['steer:sess-9', 'start'])
+    expect(context.realtime.journal.snapshot().some(entry => entry.kind === 'config.changed')).toBe(true)
+  })
+
+  it('opens the session anyway when the named session cannot be applied, and records why', async () => {
+    const { context, url } = await mount()
+    const starts: number[] = []
+    context.on('realtime-agent/start', () => { starts.push(1) })
+
+    const client = new WebSocket(`${url()}?session=sess-9`)
+    cleanups.push(() => { client.terminate() })
+    await once(client, 'open')
+    await new Promise((resolve) => { setTimeout(resolve, 20) })
+
+    // A missing responder is not a reason to refuse someone a microphone.
+    expect(starts).toHaveLength(1)
+    const changed = context.realtime.journal.snapshot().find(entry => entry.kind === 'config.changed')
+    expect(changed?.detail).toMatchObject({ refused: 'UNKNOWN_SETTING' })
+  })
+
   it('ends the session when the last client leaves', async () => {
     const { context, url } = await mount()
     const stops: number[] = []

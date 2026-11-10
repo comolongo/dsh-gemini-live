@@ -28,6 +28,7 @@ import {
   createRouteToken,
   routeAuthority,
   routeInjectionRow,
+  sessionFromUrl,
   tokenFromUrl,
   verdictFor,
   type InjectedRow,
@@ -76,6 +77,9 @@ import { createJournalFileSink } from './journal-file.ts'
 
 /** Plugin name. */
 export const name = 'realtime-audio-ws'
+
+/** The responder's steering field. Named here because this route applies it on a connect. */
+const RESPONDER_SESSION_KEY = 'realtime-responder.sessionId'
 
 export const Config = Schema.object({
   path: Schema.string().default(DEFAULT_PATH),
@@ -298,6 +302,16 @@ export function apply(ctx: Context, config: RealtimeAudioWsConfig): void {
             // secrets for, and the reason that has to be additive rather than a constructor argument,
             // since the token does not exist until this plugin applies.
             journal.record('socket.accepted', { clients: String(clients.size), url: target })
+            // The page may name the session it is showing. Applied **before** the session is opened below,
+            // because the route opens it on this same connect: a steer sent after that would race the session
+            // it was meant to direct, and a stale steer speaks another conversation's reply.
+            const steering = sessionFromUrl(target)
+            if (steering !== undefined) {
+              const outcome = injected.realtime.settings.apply(RESPONDER_SESSION_KEY, steering)
+              journal.record('config.changed', outcome.ok
+                ? { key: outcome.key, source: 'connect' }
+                : { key: RESPONDER_SESSION_KEY, refused: outcome.code })
+            }
             // Ask for the session before the bridge goes in, so the first frames are written into a session
             // that is being opened rather than dropped by the mic seam's no-session rule.
             if (live.openSessionOnConnect) {

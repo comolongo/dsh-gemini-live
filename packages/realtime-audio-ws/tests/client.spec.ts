@@ -12,6 +12,7 @@ import {
   pcm16FromFloat32,
   renderStrip,
   socketUrl,
+  withSession,
   stripRoot,
   type ClientAudioDeps,
   type ContextLike,
@@ -412,6 +413,21 @@ describe('createAudioClient', () => {
 
 // ---- the plugin ----------------------------------------------------------------------------------------
 
+describe('withSession', () => {
+  it('adds the session to a URL, before or after an existing query', () => {
+    expect(withSession('ws://h/p', 'session-abc')).toBe('ws://h/p?session=session-abc')
+    expect(withSession('ws://h/p?t=token', 'session-abc')).toBe('ws://h/p?t=token&session=session-abc')
+    // Encoded, because a session id is text from the page and this is a URL parameter.
+    expect(withSession('ws://h/p', 'a b')).toBe('ws://h/p?session=a%20b')
+  })
+
+  it('leaves the URL alone when the page named no session, or named nothing', () => {
+    expect(withSession('ws://h/p', undefined)).toBe('ws://h/p')
+    expect(withSession('ws://h/p', '')).toBe('ws://h/p')
+    expect(withSession('ws://h/p', '   ')).toBe('ws://h/p')
+  })
+})
+
 describe('defaultDeps and apply', () => {
   const scope = globalThis as unknown as Record<string, unknown>
   const saved = new Map<string, PropertyDescriptor | undefined>()
@@ -474,6 +490,36 @@ describe('defaultDeps and apply', () => {
     expect(handle.state()).toEqual({ kind: 'idle' })
     handle.stop()
     expect(graph.trackStops).toHaveLength(1)
+  })
+
+  /**
+   * The app publishes its session service on the client context. Read at use, because the page can switch
+   * conversations without reloading: a value captured at mount would steer the voice at yesterday's.
+   */
+  const startWithSession = async (key: unknown): Promise<string> => {
+    const socket = fakeSocket()
+    const graph = fakeGraph()
+    set('location', { protocol: 'http:', host: 'h:1' })
+    set('navigator', { mediaDevices: { getUserMedia: () => Promise.resolve(stream(graph.trackStops)) } })
+    set('AudioContext', function () { return graph.context })
+    let seen = ''
+    set('WebSocket', function (url: string) { seen = url; return socket.socket })
+    const context = { effect: () => undefined, uiSession: { current: { value: { key } } } }
+    apply(context as never)
+    const handle = scope[GLOBAL_KEY] as { start(): Promise<unknown> }
+    const pending = handle.start()
+    await socket.ready
+    socket.fire('onopen')
+    await pending
+    return seen
+  }
+
+  it('carries the page’s current session into the audio socket', async () => {
+    await expect(startWithSession('session-abc')).resolves.toBe('ws://h:1/dsh-realtime/audio?session=session-abc')
+  })
+
+  it('asks the voice to follow no session when the page names a blank one', async () => {
+    await expect(startWithSession('   ')).resolves.toBe('ws://h:1/dsh-realtime/audio')
   })
 })
 

@@ -119,6 +119,17 @@ export interface SocketLike {
  */
 export interface ClientContextLike {
   effect(run: unknown, label?: string): unknown
+  /**
+   * The app's session service, when the page has one.
+   *
+   * Optional because the bundle is also mounted in a fixture bed that has no app: a session id is a bonus
+   * the page supplies, not something the audio client requires to run.
+   */
+  readonly uiSession?: {
+    readonly current?: {
+      readonly value?: { readonly key?: unknown }
+    }
+  }
 }
 
 /** Everything this plugin touches outside itself, injectable so every path is testable. */
@@ -128,6 +139,8 @@ export interface ClientAudioDeps {
   readonly createAudioContext: ((sampleRate: number) => ContextLike) | undefined
   readonly createSocket: ((url: string) => SocketLike) | undefined
   readonly injected: InjectedRouteSettings | undefined
+  /** The session the page is showing, read at the moment a socket is opened. */
+  readonly sessionId?: () => string | undefined
 }
 
 /** What the caller — or a test — gets to see. */
@@ -252,6 +265,23 @@ export function pageAuthority(location: LocationLike | undefined): string | unde
 export function withToken(url: string, token: string | undefined): string {
   if (token === undefined || token === '') return url
   return `${url}?t=${encodeURIComponent(token)}`
+}
+
+/**
+ * Add the page's current session to a socket URL.
+ *
+ * The host steers the responder from this parameter **before** it opens the voice session, which is the only
+ * moment the steering can be done without a gap: a message sent after the socket opens races the session the
+ * route opens on connect. Empty and absent are the same thing here — a page that does not know its session
+ * simply does not ask the voice to follow one.
+ * @param url - the socket URL, with or without a query.
+ * @param sessionId - the session the page is showing.
+ * @returns the URL to connect to.
+ */
+export function withSession(url: string, sessionId: string | undefined): string {
+  if (sessionId === undefined || sessionId.trim().length === 0) return url
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}session=${encodeURIComponent(sessionId.trim())}`
 }
 
 /**
@@ -447,7 +477,7 @@ export function createAudioClient(deps: ClientAudioDeps): ClientAudio {
     if (route === undefined) {
       return fail('no authority for the audio socket: this page has none of its own and the host injected none')
     }
-    const url = withToken(route, deps.injected?.token)
+    const url = withSession(withToken(route, deps.injected?.token), deps.sessionId?.())
     if (deps.getUserMedia === undefined) return fail('this page has no microphone API')
     if (deps.createAudioContext === undefined) return fail('this page has no audio API')
     if (deps.createSocket === undefined) return fail('this page has no WebSocket API')
@@ -1394,7 +1424,17 @@ export function mountStrip(deps: StripDeps): Strip {
  * @param ctx - the client context, used only to own the lifetime.
  */
 export function apply(ctx: ClientContextLike): void {
-  const client = createAudioClient(defaultDeps())
+  /**
+   * The session the page is showing, read at use rather than at mount.
+   *
+   * The app can switch sessions without reloading, and a value captured at mount would steer the voice at
+   * the conversation the page *was* on.
+   */
+  const sessionId = (): string | undefined => {
+    const key = ctx.uiSession?.current?.value?.key
+    return typeof key === 'string' && key.trim().length > 0 ? key : undefined
+  }
+  const client = createAudioClient({ ...defaultDeps(), sessionId })
   let mounted = false
 
   /**
