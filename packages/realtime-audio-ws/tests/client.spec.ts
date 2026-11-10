@@ -522,6 +522,28 @@ describe('defaultDeps and apply', () => {
     await expect(startWithSession('   ')).resolves.toBe('ws://h:1/dsh-realtime/audio')
   })
 
+  it('still opens the microphone when the context refuses the session lookup', async () => {
+    const socket = fakeSocket()
+    const graph = fakeGraph()
+    set('location', { protocol: 'http:', host: 'h:1' })
+    set('navigator', { mediaDevices: { getUserMedia: () => Promise.resolve(stream(graph.trackStops)) } })
+    set('AudioContext', function () { return graph.context })
+    let seen = ''
+    set('WebSocket', function (url: string) { seen = url; return socket.socket })
+    // A context that throws on an undeclared service, rather than answering undefined. That exception used to
+    // escape `start()` and the icon swallowed it, which is exactly a button that does nothing.
+    const context: Record<string, unknown> = { effect: () => undefined }
+    Object.defineProperty(context, 'uiSession', { get() { throw new Error('no such service') } })
+    apply(context as never)
+
+    const handle = scope[GLOBAL_KEY] as { start(): Promise<unknown> }
+    const pending = handle.start()
+    await socket.ready
+    socket.fire('onopen')
+    await expect(pending).resolves.toEqual({ kind: 'live' })
+    expect(seen).toBe('ws://h:1/dsh-realtime/audio')
+  })
+
   it('finds the session through the context resolver when it is not a property', async () => {
     const socket = fakeSocket()
     const graph = fakeGraph()

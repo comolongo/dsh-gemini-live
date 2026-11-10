@@ -1433,13 +1433,17 @@ export function apply(ctx: ClientContextLike): void {
    * the conversation the page *was* on.
    */
   const sessionId = (): string | undefined => {
-    // Two ways in, both optional: the service may be a property of this context, or reachable through the
-    // context's own resolver. A client plugin that is not given the service must still mount — a missing
-    // session id costs the steering, not the microphone — so neither lookup may throw.
-    const direct = ctx.uiSession
-    const resolved = direct ?? (ctx.get?.('uiSession') as typeof ctx.uiSession)
-    const key = resolved?.current?.value?.key
-    return typeof key === 'string' && key.trim().length > 0 ? key : undefined
+    // Two ways in, both optional, and **the whole lookup is total**. A context that refuses an undeclared
+    // service — a proxy that throws rather than returning undefined — must cost the steering, not the
+    // microphone: this runs inside `start()`, and an exception here made the button do nothing at all.
+    try {
+      const direct = ctx.uiSession
+      const resolved = direct ?? (ctx.get?.('uiSession') as typeof ctx.uiSession)
+      const key = resolved?.current?.value?.key
+      return typeof key === 'string' && key.trim().length > 0 ? key : undefined
+    } catch {
+      return undefined
+    }
   }
   const client = createAudioClient({ ...defaultDeps(), sessionId })
   let mounted = false
