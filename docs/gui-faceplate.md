@@ -208,3 +208,20 @@ diff. Everything in §4 is as specified except these four.
    draggable knob would claim knowledge the panel does not have) and the labelled field directly beneath it
    is what writes. If it should be draggable, that is a small follow-up: drag → value → the same `set`.
 
+---
+
+## Amendment (2026-11-10) — the surface is a chip
+
+The faceplate was a full-width, 1U plate docked across the bottom of the page, with the page's own body
+reserving a 58 px band (`padding-bottom`) so the conversation sat above it rather than under it. On a
+real screen that band was too much surface for a control that is idle most of the time — measured against
+the owner's own use, not against a screenshot.
+
+The replacement keeps the plate's *material* (the metal, the monospace labels, the drilled levels) and
+changes its *footprint*: a compact 34 px chip in the bottom-right corner, floating, reserving no band.
+The drill levels grow upward from the chip while one is open. Two consequences are deliberate:
+
+- The app's layout gives up nothing, so nothing has to out-specify the host's `body` rule any more; the
+  containment test that pinned the reservation now pins its absence.
+- The chip may overlap page content in the corner. That is the trade the docking rule refused, and it is
+  accepted here because the alternative was a band across every page for a surface used in bursts.

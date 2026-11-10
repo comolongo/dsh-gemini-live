@@ -50,8 +50,8 @@ import type { InjectedRow } from './injection.ts'
 /** The element the panel mounts on. Duplicated in the client half, which cannot import it. */
 export const STRIP_ELEMENT_ID = 'dsh-realtime-strip'
 
-/** The height of the collapsed 1U plate, in pixels. The page reserves exactly this. */
-export const STRIP_HEIGHT_PX = 58
+/** The compact deck's height, in pixels. The page reserves no band at all: the surface floats. */
+export const STRIP_HEIGHT_PX = 34
 
 /**
  * The panel's container, as markup.
@@ -91,14 +91,20 @@ export function stripStyles(): string {
   return `
 /* The plate. Opaque last layer: see the module note. */
 #dsh-realtime-strip {
+  /* A chip in the corner, not a band across the page: small enough to ignore, and floating so the app's
+     own layout gives up nothing. When a drill level opens it grows upward from this anchor. */
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  right: 14px;
+  bottom: 14px;
   z-index: 2147483000;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  width: max-content;
+  max-width: min(92vw, 460px);
+  border: 1px solid #3a3d42;
+  border-radius: 12px;
+  overflow: hidden;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 11px;
   line-height: 1.35;
@@ -106,20 +112,9 @@ export function stripStyles(): string {
   background:
     repeating-linear-gradient(90deg, rgb(255 255 255 / 1.5%) 0 1px, rgb(20 22 25 / 0%) 1px 3px),
     linear-gradient(180deg, #26282c 0%, #1b1d20 42%, #141619 100%);
-  border-top: 1px solid #3a3d42;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), 0 -8px 24px rgb(0 0 0 / 45%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), 0 10px 28px rgb(0 0 0 / 45%);
   -webkit-user-select: none;
   user-select: none;
-}
-
-/* The band the app's own layout gives up so the plate never covers the conversation.
-   The reservation is the collapsed plate's height and nothing more, because a permanent band twice this
-   tall would cost the conversation the screen space the whole design exists to give back. Two things may
-   grow past it — a notice line, and the drill-through while it is open — both of them transient and both
-   user-visible rather than silent. */
-html body {
-  box-sizing: border-box;
-  padding-bottom: ${String(STRIP_HEIGHT_PX)}px;
 }
 
 #dsh-realtime-strip * { box-sizing: border-box; }
@@ -127,10 +122,13 @@ html body {
 .dvr-row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   height: ${String(STRIP_HEIGHT_PX)}px;
-  padding: 0 14px;
+  padding: 0 10px;
 }
+
+/* The deck's identity, not its controls: a chip in the corner should read as a control, not as hardware. */
+.dvr-row .dvr-brand, .dvr-row .dvr-screw { display: none; }
 
 .dvr-screw {
   flex: 0 0 auto;

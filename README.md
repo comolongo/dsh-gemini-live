@@ -108,6 +108,7 @@ run:
 |---|---|
 | [docs/protocol.md](docs/protocol.md) | GPT-Live-1 over WebSocket: the full client and server vocabulary, the delegation envelope, audio formats, and the traps |
 | [docs/gemini-live-build.md](docs/gemini-live-build.md) | Gemini Live: the build record, the tool bridge, and **what a first live-key run still has to prove** |
+| [docs/voices.html](docs/voices.html) | the 30 prebuilt voices, one click each — `pnpm voice-samples` re-renders them |
 | [docs/second-provider-spike.md](docs/second-provider-spike.md) | the provider comparison, with ✅ observed and ❓ documented kept apart |
 | [docs/design.md](docs/design.md) | architecture, scope, session lifecycle |
 | [docs/decisions.md](docs/decisions.md) | ADRs — why client delegation, why a seam, why this repo is non-governed |

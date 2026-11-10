@@ -113,15 +113,18 @@ describe('stripRows', () => {
     expect(rule(stripStyles(), '#dsh-realtime-strip')).toMatch(/box-shadow:/)
   })
 
-  it('gives the app its bottom band back, so the plate never covers the conversation', () => {
-    // The whole point of docking rather than floating: a fixed overlay in a page this plugin does not
-    // control always overlaps something, so what it overlaps is the page's own chrome. The reservation has
-    // to out-specify the host's own `body` rule and stay inside 100%, or it trades an overlap for a
-    // scrollbar.
-    const reserved = rule(stripStyles(), 'html body')
-    expect(reserved).toContain(`padding-bottom: ${String(STRIP_HEIGHT_PX)}px`)
-    expect(reserved).toContain('box-sizing: border-box')
-    expect(rule(stripStyles(), '.dvr-row')).toContain(`height: ${String(STRIP_HEIGHT_PX)}px`)
+  it('floats as a small chip and takes no band from the app', () => {
+    // The plate used to be a full-width 1U bar that reserved the page's bottom band. It was too much
+    // surface for a control that is idle most of the time, so it is now a chip in the corner: no
+    // reservation to out-specify, and a compact deck.
+    const styles = stripStyles()
+    expect(styles).not.toContain('padding-bottom')
+    const strip = rule(styles, '#dsh-realtime-strip')
+    expect(strip).toContain('position: fixed')
+    expect(strip).toContain('width: max-content')
+    expect(strip).toContain('border-radius: 12px')
+    expect(rule(styles, '.dvr-row')).toContain(`height: ${String(STRIP_HEIGHT_PX)}px`)
+    expect(rule(styles, '.dvr-row .dvr-brand, .dvr-row .dvr-screw')).toContain('display: none')
   })
 
   it('carries an element the client can find, and no behaviour of its own', () => {

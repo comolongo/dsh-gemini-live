@@ -49,7 +49,7 @@ const PATTERNS = [
   },
 ]
 
-const SKIP_EXTENSIONS = /\.(?:png|jpg|jpeg|gif|webp|ico|woff2?|ttf|otf|pdf|zip|gz|tgz|mp3|wav|aiff|pcm|bin|db)$/i
+const SKIP_EXTENSIONS = /\.(?:png|jpg|jpeg|gif|webp|ico|woff2?|ttf|otf|pdf|zip|gz|tgz|mp3|wav|m4a|aiff|pcm|bin|db)$/i
 
 const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean)
 
